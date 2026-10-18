@@ -431,6 +431,12 @@ function App() {
     : view === 'card' ? 4
     : view === 'future' || view === 'complete' || view === 'poster' ? 5
     : 1
+  const mascotMood = voiceError ? 'mood-sad'
+    : isTranscribing ? 'mood-thinking'
+    : isListening || isRecording ? 'mood-listening'
+    : conversationState === 'speaking' ? 'mood-speaking'
+    : conversationState === 'thinking' || conversationState === 'replying' ? 'mood-thinking'
+    : 'mood-happy'
 
   const statusLabel = useMemo(() => ({
     entry: '准备开始', setup: '课堂设置', device: '设备检查', welcome: '欢迎来到梦想剧场',
@@ -1608,7 +1614,7 @@ function App() {
   }
   function goBack() {
     stopVoice()
-    const previous: Partial<Record<View, View>> = { setup: 'entry', device: 'setup', welcome: 'device', interview: 'welcome', 'dream-review': 'interview', photo: 'interview', card: 'photo', future: 'card', poster: 'complete' }
+    const previous: Partial<Record<View, View>> = { setup: 'welcome', device: 'setup', welcome: 'entry', interview: 'welcome', 'dream-review': 'interview', photo: 'interview', card: 'photo', future: 'card', poster: 'complete' }
     const previousView = previous[view]; if (previousView) setView(previousView)
   }
 
@@ -1688,7 +1694,7 @@ function App() {
       </div>}
     <header className="topbar"><div className="brand-lockup"><button className="brand-mark" aria-label="全局设置" title="全局设置" onClick={openGlobalSettings}><Sparkles size={21} /></button><div><p className="brand-name">未来梦想剧场</p><p className="brand-tagline">每个梦想，都值得被看见</p></div></div><div className="topbar-meta"><span className="session-pill"><span className="status-dot" />{mode === 'classroom' ? `课堂模式 · 第 ${sessionNumber} 位` : '家庭模式'}</span>{view !== 'entry' && <button className="icon-button" title="返回入口" onClick={() => clearSession(false)}><X size={18} /></button>}</div></header>
     <main className={`main-content view-${view}`}>
-      {view !== 'entry' && view !== 'complete' && view !== 'poster' && <div className="journey-bar"><div className="journey-label"><span>当前步骤</span><strong>{statusLabel}</strong></div><div className="star-progress" aria-label={`进度 ${starsEarned}/5`}>{[1, 2, 3, 4, 5].map((star) => <span key={star} className={star <= starsEarned ? 'on' : ''}>⭐</span>)}</div><span className={`privacy-label ${apiStatus}`}><LockKeyhole size={14} />{apiStatus === 'connected' ? '本地服务已连接' : '离线也可体验'}</span></div>}
+      {view !== 'entry' && view !== 'setup' && view !== 'complete' && view !== 'poster' && <div className="journey-bar"><div className="journey-label"><span>当前步骤</span><strong>{statusLabel}</strong></div><div className="star-progress" aria-label={`进度 ${starsEarned}/5`}>{[1, 2, 3, 4, 5].map((star) => <span key={star} className={star <= starsEarned ? 'on' : ''}>⭐</span>)}</div><span className={`privacy-label ${apiStatus}`}><LockKeyhole size={14} />{apiStatus === 'connected' ? '本地服务已连接' : '离线也可体验'}</span></div>}
       {view === 'entry' && <section className="entry-layout">
         <div className="entry-copy">
           <div className="entry-mascot"><span className="mascot-face">🦊</span><span className="mascot-bubble">嗨！我是梦想小伙伴</span></div>
@@ -1717,7 +1723,9 @@ function App() {
           <span className="art-sticker sticker-rainbow">🌈</span>
         </div>
       </section>}
-      {view === 'setup' && <section className="content-section narrow-section">
+      {view === 'setup' && <div className="teacher-drawer-overlay" onClick={(event) => { if (event.target === event.currentTarget) setView('welcome') }}>
+        <section className="content-section narrow-section teacher-drawer" role="dialog" aria-modal="true" aria-label="老师准备">
+        <button className="teacher-drawer-close" onClick={() => setView('welcome')} aria-label="关闭老师准备">✕</button>
         <div className="section-heading"><div><div className="eyebrow"><span />老师准备</div><h2>老师准备一下</h2><p>孩子只负责玩；这里可以调整年龄、主题和授权，设备检查是可选的。</p></div><div className="heading-icon coral"><Settings2 size={22} /></div></div>
         <div className="settings-grid">
           <label className="field-label">年龄段<span className="select-wrap"><select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)}><option>3-4 岁</option><option>5-6 岁</option><option>6 岁以上</option></select><ChevronDown size={16} /></span></label>
@@ -1742,10 +1750,11 @@ function App() {
           <button className="secondary-button" onClick={beginDeviceCheck}>检查设备</button>
           <button className="primary-button" onClick={() => void startInterview()} disabled={globalSettings.imageProvider === 'siliconflow' && !onlineImageConsent}>开始体验 <ArrowRight size={17} /></button>
         </div>
-      </section>}
+        </section>
+      </div>}
       {view === 'device' && <section className="content-section narrow-section"><div className="section-heading"><div><div className="eyebrow"><span />设备检查</div><h2>让我们听见，也看见</h2><p>设备只会在你选择使用时打开。摄像头和麦克风可以分别跳过。</p></div><div className="heading-icon mint"><Camera size={22} /></div></div><div className="device-grid"><div className="device-preview"><Camera size={26} /><span>摄像头权限检查</span><small>{cameraStatus === 'ready' ? '已连接' : cameraStatus === 'checking' ? '正在检查…' : cameraStatus === 'unavailable' ? '不可用；可选卡通形象' : '点击“检查设备”测试'}</small></div><div className="device-check-list"><div className={`device-row ${microphoneStatus === 'ready' ? 'ready' : ''}`}><span className="device-icon"><Mic size={18} /></span><div><strong>麦克风</strong><small>{microphoneStatus === 'ready' ? '已连接' : microphoneStatus === 'checking' ? '正在检查…' : microphoneStatus === 'unavailable' ? '不可用；仍可点选答案' : '点击“检查设备”测试'}</small></div><span className="device-status">{microphoneStatus === 'ready' && <CheckCircle2 size={18} />}</span></div><div className="device-row"><span className="device-icon"><Volume2 size={18} /></span><div><strong>扬声器</strong><small>{voiceEnabled ? '开启后会播放引导语音' : '语音播报已关闭'}</small></div></div><button className="secondary-button device-test" onClick={checkDevices} disabled={deviceStatus === 'checking'}><RefreshCw size={17} className={deviceStatus === 'checking' ? 'spin' : ''} />{deviceStatus === 'checking' ? '正在检查…' : '检查设备'}</button></div></div>{cameraError && <div className="warning-callout"><CircleHelp size={18} /><span>{cameraError}</span></div>}<div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回设置</button><button className="primary-button" onClick={() => void startInterview()}>开始体验 <ArrowRight size={17} /></button></div></section>}
       {view === 'welcome' && <section className="welcome-layout child-welcome-layout">
-        <div className="guide-portrait"><div className="guide-face">🦊</div><span className="guide-status"><span />准备好了</span></div>
+        <div className="guide-portrait"><div className={`guide-face ${mascotMood}`}>🦊</div><span className="guide-status"><span />准备好了</span></div>
         <div className="welcome-copy">
           <div className="eyebrow"><span />你好呀</div>
           <h2>我们一起<br /><em>想一想未来！</em></h2>
@@ -1760,7 +1769,7 @@ function App() {
       </section>}
       {view === 'interview' && <section className="content-section interview-section child-interview-section">
         <div className="chat-companion-bar">
-          <div className="guide-face chat-guide-face">🦊</div>
+          <div className={`guide-face chat-guide-face ${mascotMood}`}>🦊</div>
           <div className="chat-companion-info">
             <strong>梦想小伙伴</strong>
             <span className="chat-status-dot">{conversationState === 'thinking' ? '正在想一想…' : conversationState === 'speaking' ? '正在说话…' : conversationState === 'replying' ? '和你聊天中' : conversationState === 'generating' ? '准备画出来…' : '在线'}</span>

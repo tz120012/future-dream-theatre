@@ -308,6 +308,20 @@ h1 em,h2 em{font-style:normal;color:var(--ink);background:linear-gradient(180deg
 }
 .guide-face{width:170px;height:170px;font-size:104px;color:var(--ink);background:#fff;border:4px solid var(--ink);border-radius:50%}
 .guide-status{background:#fff;border:2px solid var(--ink);box-shadow:0 3px 0 rgba(43,42,74,.14);color:var(--ink)}
+.teacher-drawer-overlay{position:fixed;inset:0;z-index:80;display:flex;justify-content:flex-end;background:rgba(43,42,74,.38);backdrop-filter:blur(3px)}
+.teacher-drawer{position:relative;width:min(600px,94vw);height:100vh;max-height:100vh;margin:0;padding:40px 34px 30px;border-radius:30px 0 0 30px;overflow-y:auto;animation:drawer-in .28s ease}
+@keyframes drawer-in{from{transform:translateX(48px);opacity:.5}to{transform:none;opacity:1}}
+.teacher-drawer-close{position:absolute;top:16px;right:18px;width:40px;height:40px;display:grid;place-items:center;padding:0;color:var(--ink);background:#fff;border:2px solid var(--ink);border-radius:50%;box-shadow:0 3px 0 rgba(43,42,74,.16);font-size:16px;font-weight:800;z-index:2}
+.guide-face.mood-speaking{animation:fox-talk .45s ease-in-out infinite}
+@keyframes fox-talk{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(2deg)}}
+.guide-face.mood-listening{animation:fox-listen 1.1s ease-in-out infinite}
+@keyframes fox-listen{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.guide-face.mood-thinking{animation:fox-think 2.2s ease-in-out infinite}
+@keyframes fox-think{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.guide-face.mood-sad{transform:rotate(7deg);filter:grayscale(.35)}
+.guide-face.mood-happy{animation:fox-breathe 3.6s ease-in-out infinite}
+@keyframes fox-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+@media(max-width:640px){.teacher-drawer{width:100%;height:100dvh;border-radius:0;padding:34px 20px 24px}}
 .chat-guide-face{width:58px;height:58px;font-size:30px;background:var(--yellow);color:var(--ink);border-radius:50%}
 .chat-avatar{width:38px;height:38px;font-size:20px;background:var(--yellow);color:var(--ink);border-radius:50%}
 .chat-bubbles{min-height:96px;margin-bottom:0}
