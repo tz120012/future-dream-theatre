@@ -660,7 +660,18 @@ function App() {
     if (!navigator.mediaDevices?.getUserMedia) { setCameraError('当前浏览器不支持摄像头预览，可以点“上传照片”选一张正脸照。'); return }
     setCameraError('')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } })
+      // Prefer a physical camera over virtual ones (ToDesk/OBS etc.) when the
+      // system exposes several video inputs.
+      let constraints: MediaStreamConstraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const cameras = devices.filter((device) => device.kind === 'videoinput')
+        const physical = cameras.find((device) => device.label && !/todesk|virtual|obs|manycam|snap camera/i.test(device.label))
+        if (physical?.deviceId) {
+          constraints = { video: { deviceId: { exact: physical.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
+        }
+      } catch { /* enumerateDevices can fail before permission; use the default */ }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
