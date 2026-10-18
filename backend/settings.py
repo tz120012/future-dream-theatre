@@ -42,7 +42,7 @@ def _env(name: str, default: str) -> str:
 @dataclass(frozen=True)
 class Settings:
     app_mode: str = _env("APP_MODE", "local")
-    stt_provider: str = _env("STT_PROVIDER", "local_whisper")
+    stt_provider: str = _env("STT_PROVIDER", "browser")
     whisper_model: str = _env("WHISPER_MODEL", "base")
     whisper_compute_type: str = _env("WHISPER_COMPUTE_TYPE", "int8")
     # Where the downloaded Whisper model files live. Empty means the default
@@ -52,7 +52,7 @@ class Settings:
     # Set to 1 to forbid any network access when loading Whisper. The backend
     # already switches to offline loading by itself once the model is cached.
     whisper_local_only: bool = _env("WHISPER_LOCAL_ONLY", "0") in {"1", "true", "True", "yes"}
-    llm_provider: str = _env("LLM_PROVIDER", "template")
+    llm_provider: str = _env("LLM_PROVIDER", "siliconflow")
     openai_model: str = _env("OPENAI_MODEL", "gpt-4o-mini")
     siliconflow_chat_model: str = _env("SILICONFLOW_CHAT_MODEL", "deepseek-ai/DeepSeek-V4.1-Flash")
     siliconflow_image_model: str = _env("SILICONFLOW_IMAGE_MODEL", "Tongyi-MAI/Z-Image")

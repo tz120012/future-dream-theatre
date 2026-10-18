@@ -4,12 +4,12 @@ services:
     restart: unless-stopped
     environment:
       APP_MODE: ${APP_MODE:-local}
-      STT_PROVIDER: ${STT_PROVIDER:-local_whisper}
+      STT_PROVIDER: ${STT_PROVIDER:-browser}
       WHISPER_MODEL: ${WHISPER_MODEL:-base}
       WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
       WHISPER_MODEL_DIR: /app/data/whisper
       HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
-      LLM_PROVIDER: ${LLM_PROVIDER:-template}
+      LLM_PROVIDER: ${LLM_PROVIDER:-siliconflow}
       TTS_PROVIDER: ${TTS_PROVIDER:-browser}
       IMAGE_PROVIDER: ${IMAGE_PROVIDER:-mock}
       RETENTION_MINUTES: ${RETENTION_MINUTES:-30}

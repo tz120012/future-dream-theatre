@@ -52,9 +52,9 @@
 
 本地 Whisper 模型只需要下载一次：默认保存在 `backend/data/whisper`，之后再启动会直接从磁盘加载，不会重复下载，也不会再联网。想放到别的磁盘可设置 `WHISPER_MODEL_DIR`（相对路径以 `backend` 目录为基准）；完全断网时可设置 `WHISPER_LOCAL_ONLY=1`。`GET /api/config/capabilities` 的 `whisper.cached` 会显示当前模型是否已经缓存。
 
-语音识别、对话模型和图片模型可在全局设置中配置；默认使用本机 faster-whisper、内置模板和 Mock 图片。硅基流动使用 `https://api.siliconflow.cn/v1` 的对话与 `/images/generations` 图片接口。摄像头和麦克风需要在 `localhost` 或 HTTPS 页面中使用。
+语音识别、对话模型和图片模型可在全局设置中配置；默认语音识别使用浏览器自带识别，对话优先使用硅基流动（未配置 Key 或未授权时会自动回退内置模板），图片默认 Mock。硅基流动使用 `https://api.siliconflow.cn/v1` 的对话与 `/images/generations` 图片接口。摄像头和麦克风需要在 `localhost` 或 HTTPS 页面中使用。
 
-后端提供 `backend/.env.example` 作为配置模板，默认不需要任何 API Key。直接运行后端时可复制为 `backend/.env`；使用 Compose 时可复制为项目根目录的 `.env`。Key 由用户自行提供和付费，保存在运行后端的设备上。
+后端提供 `backend/.env.example` 作为配置模板，不配置 API Key 也能体验：对话会回退到内置模板，图片使用 Mock。直接运行后端时可复制为 `backend/.env`；使用 Compose 时可复制为项目根目录的 `.env`。Key 由用户自行提供和付费，保存在运行后端的设备上。
 
 页面左上角的图标打开全局设置，可切换浏览器语音识别或本地 Whisper、配置 OpenAI 兼容 API 或硅基流动、选择图片生成服务、开关语音播报和设置新会话保留时间。硅基流动使用同一把 Key，聊天模型和图片模型分别配置，默认分别为 `deepseek-ai/DeepSeek-V4.1-Flash` 和 `Tongyi-MAI/Z-Image`。照片页还能按课堂时间选择出图速度：“精细绘本”使用 Z-Image（约 15–20 秒，水彩绘本感），“快速卡通”使用 Z-Image-Turbo（约 5 秒），两个模型都可在设置里替换。照片模式可以现场拍照，也可以直接上传一张正脸照；上传/拍照后会让人物参考孩子的脸，并可选“现在的样子”（约 20 秒、保脸更准）或“长大以后”（两步生成，约 1 分钟，成年版的五官由模型推断，可能不完全像）。在线对话用于“梦想理解”和“未来的自己”多轮回复。老师或家长可在每次体验前分别确认是否发送访谈及未来对话文字、是否发送已确认的角色/场景/风格文字来生成图片。API Key 保存在后端本机配置数据中，不会由读取接口返回，也不会写入浏览器存储。
 

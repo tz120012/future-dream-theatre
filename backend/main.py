@@ -130,9 +130,9 @@ class ConversationTurnResult(BaseModel):
 
 
 class GlobalSettingsUpdate(BaseModel):
-    stt_provider: Literal["local_whisper", "browser"] = "local_whisper"
+    stt_provider: Literal["local_whisper", "browser"] = "browser"
     whisper_model: Literal["tiny", "base", "small"] = "base"
-    llm_provider: Literal["template", "openai_compatible", "siliconflow"] = "template"
+    llm_provider: Literal["template", "openai_compatible", "siliconflow"] = "siliconflow"
     openai_base_url: str = Field(default="", max_length=500)
     openai_model: str = Field(default="gpt-4o-mini", min_length=1, max_length=120)
     openai_api_key: str | None = Field(default=None, max_length=1000)

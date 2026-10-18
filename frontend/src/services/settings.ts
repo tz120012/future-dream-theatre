@@ -20,9 +20,9 @@ export type GlobalSettings = {
 }
 
 export const defaultGlobalSettings: GlobalSettings = {
-  sttProvider: 'local_whisper',
+  sttProvider: 'browser',
   whisperModel: 'base',
-  llmProvider: 'template',
+  llmProvider: 'siliconflow',
   openaiBaseUrl: '',
   openaiModel: 'gpt-4o-mini',
   openaiApiKey: '',
