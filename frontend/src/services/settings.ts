@@ -1,6 +1,8 @@
 export type SttProvider = 'local_whisper' | 'browser'
 export type LlmProvider = 'template' | 'openai_compatible' | 'siliconflow'
 export type ImageProvider = 'mock' | 'siliconflow'
+export type TtsProvider = 'browser' | 'siliconflow'
+export type TtsTone = 'warm' | 'lively' | 'calm'
 
 export type GlobalSettings = {
   sttProvider: SttProvider
@@ -16,6 +18,9 @@ export type GlobalSettings = {
   siliconflowApiKey: string
   imageProvider: ImageProvider
   ttsEnabled: boolean
+  ttsProvider: TtsProvider
+  ttsVoice: string
+  ttsTone: TtsTone
   retentionMinutes: number
 }
 
@@ -33,6 +38,9 @@ export const defaultGlobalSettings: GlobalSettings = {
   siliconflowApiKey: '',
   imageProvider: 'mock',
   ttsEnabled: true,
+  ttsProvider: 'siliconflow',
+  ttsVoice: 'FunAudioLLM/CosyVoice2-0.5B:anna',
+  ttsTone: 'warm',
   retentionMinutes: 30,
 }
 

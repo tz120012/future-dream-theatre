@@ -5,7 +5,7 @@ import {
   Settings2, ShieldCheck, Sparkles, Trash2, Upload, Volume2, VolumeX, WandSparkles, X, Zap,
 } from 'lucide-react'
 import './App.css'
-import { addResponse, analyzeConversationTurn, analyzeDream, askFutureSelf, clearRemoteSession, createSession, deleteRemoteSession, guessGenderByName, readGlobalSettings, startDreamCardGeneration, transcribeAudio, updateGlobalSettings, waitForGeneration, type ConversationTurnResult, type DreamAnalysis, type DreamResponse, type FutureSelfTurn } from './services/api'
+import { addResponse, analyzeConversationTurn, analyzeDream, askFutureSelf, clearRemoteSession, createSession, deleteRemoteSession, guessGenderByName, readGlobalSettings, startDreamCardGeneration, synthesizeSpeech, transcribeAudio, updateGlobalSettings, waitForGeneration, type ConversationTurnResult, type DreamAnalysis, type DreamResponse, type FutureSelfTurn } from './services/api'
 import { loadLocalSettings, saveLocalSettings, type GlobalSettings } from './services/settings'
 import coverSpace from './assets/cover-space.png'
 
@@ -42,6 +42,55 @@ type BrowserRecognition = {
   onend: (() => void) | null
 }
 type BrowserRecognitionConstructor = new () => BrowserRecognition
+
+// 后端把出图失败的原因分成了几类（见 backend/main.py 的 _image_error_code），
+// 这里翻译成老师看了就知道该怎么办的中文。
+const imageFailureMessages: Record<string, string> = {
+  image_reference_rejected:
+    '这张照片被服务方内容审核拦下了（儿童照片容易被误判，不是你操作的问题）。点「重新生成」再试一次，或换一张更清楚的正脸照，也可以改用「卡通形象」。',
+  image_prompt_rejected:
+    '这次梦想卡的内容触发了服务方审核，换个说法再点一次「重新生成」试试。',
+  image_auth_failed:
+    '硅基流动 API Key 无效或已过期。请打开全局设置重新填写 Key。',
+  image_quota_exceeded:
+    '硅基流动账户余额不足或调用太频繁。请检查账户余额，或过几分钟再试。',
+  image_timeout:
+    '图片服务这次太慢了（照片保脸要跑两步）。点「重新生成」再试一次，或改用「卡通形象」。',
+  image_upstream_error:
+    '图片服务暂时不稳定，过一会儿点「重新生成」即可。',
+}
+
+function imageFailureMessage(code: string | undefined): string {
+  return imageFailureMessages[code ?? ''] ?? '图片服务暂时不可用，下面先显示本地梦想卡。'
+}
+
+// 请求阶段（还没排上队）的错误原因，同样要给出可操作的提示。
+const requestFailureMessages: Record<string, string> = {
+  generation_timeout:
+    '生成超时了。照片保脸要先出模板再融合，服务方审核重试会拖时间——点「重新生成」，或改用「卡通形象」。',
+  reference_image_size_invalid:
+    '照片太大了（超过 4MB）。请重拍一张，或换一张更小的照片。',
+  unsupported_reference_image:
+    '这张照片的格式不支持，请重拍一张 JPG 或 PNG。',
+  reference_image_type_mismatch:
+    '照片内容和格式对不上，请重拍一张。',
+  invalid_reference_image:
+    '这张照片没法用作参考，请重拍一张正脸、单人、光线均匀的照片。',
+  unsafe_image_prompt:
+    '这个梦想方向触发了内容安全检查，换个说法或换个方向再试。',
+  reference_image_requires_online_provider:
+    '只有开启「硅基流动」图片服务时才能用照片生成。',
+  image_consent_required:
+    '需要先由老师或家长确认，才能把梦想文字发送到硅基流动生成图片。',
+  child_photo_consent_required:
+    '需要先由老师或家长单独确认，才能把本张照片发送给硅基流动绘制职业形象。',
+  siliconflow_api_key_missing:
+    '还没有配置硅基流动 API Key。请打开全局设置完成配置。',
+}
+
+function requestFailureMessage(reason: string): string {
+  return requestFailureMessages[reason] ?? '图片服务暂时不可用，下面先显示本地梦想卡。'
+}
 
 const questions = [
   { label: '你最喜欢做什么，或者帮助谁？', helper: '可以说一件你觉得开心的事。', options: ['帮助小动物', '发明东西', '照顾植物', '我还不知道'] },
@@ -474,6 +523,8 @@ function App() {
   const audioAnalyserRef = useRef<AnalyserNode | null>(null)
   const voiceMonitorTimerRef = useRef<number | undefined>(undefined)
   const speechDetectedRef = useRef(false)
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null)
+  const speechJobRef = useRef(0)
   const transcribeWhenStoppedRef = useRef(false)
   const transcriptionAbortRef = useRef<AbortController | null>(null)
   const browserRecognitionRef = useRef<BrowserRecognition | null>(null)
@@ -548,6 +599,9 @@ function App() {
           siliconflowImageModel: remote.siliconflow_image_model,
           siliconflowImageFastModel: remote.siliconflow_image_fast_model,
           siliconflowImageEditModel: remote.siliconflow_image_edit_model,
+          ttsProvider: remote.tts_provider,
+          ttsVoice: remote.siliconflow_tts_voice,
+          ttsTone: remote.siliconflow_tts_tone,
           imageProvider: remote.image_provider,
           retentionMinutes: remote.retention_minutes,
         }
@@ -561,34 +615,76 @@ function App() {
     else stopCamera()
   }, [photoMode, view])
 
-  function speak(text: string) {
-    if (!voiceEnabled || !('speechSynthesis' in window)) return
+  function cancelSpeechPlayback() {
+    speechJobRef.current += 1
+    const audio = speechAudioRef.current
+    if (audio) {
+      audio.onended = null
+      audio.onerror = null
+      audio.pause()
+      audio.removeAttribute('src')
+      speechAudioRef.current = null
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+  }
+  function pickBrowserVoice(): SpeechSynthesisVoice | null {
+    const voices = window.speechSynthesis.getVoices()
+    const chinese = voices.filter((voice) => /zh|cmn/i.test(voice.lang))
+    return chinese.find((voice) => /xiaoxiao|xiaoyi|huihui|female|女/i.test(voice.name)) ?? chinese[0] ?? null
+  }
+  function speakWithBrowser(text: string, finish: () => void) {
+    if (!('speechSynthesis' in window)) { finish(); return }
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'zh-CN'; utterance.rate = .95; window.speechSynthesis.speak(utterance)
+    utterance.lang = 'zh-CN'; utterance.rate = .92; utterance.pitch = 1.02
+    const voice = pickBrowserVoice()
+    if (voice) utterance.voice = voice
+    utterance.onend = finish
+    utterance.onerror = finish
+    window.speechSynthesis.speak(utterance)
   }
   function speakAndThen(text: string, onDone: () => void) {
-    if (!voiceEnabled || !('speechSynthesis' in window)) {
-      window.setTimeout(onDone, 350)
-      return
-    }
+    if (!voiceEnabled) { window.setTimeout(onDone, 300); return }
+    cancelSpeechPlayback()
+    const job = speechJobRef.current
     let settled = false
     const finish = () => {
       if (settled) return
       settled = true
       onDone()
     }
-    window.speechSynthesis.cancel()
-    if (window.speechSynthesis.paused) window.speechSynthesis.resume()
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'zh-CN'; utterance.rate = .92
-    utterance.onend = finish
-    utterance.onerror = finish
-    window.speechSynthesis.speak(utterance)
-    // Safety fallback: some browsers occasionally fail to fire onend/onerror,
-    // which would leave the conversation stuck. Force progression after a cap.
-    const estimatedMs = Math.max(350, text.length * 220)
-    window.setTimeout(finish, estimatedMs + 4000)
+    const fallback = () => {
+      if (job !== speechJobRef.current) return
+      speakWithBrowser(text, finish)
+    }
+    // Safety fallback: a stuck TTS request or a browser that never fires
+    // onend must not leave the conversation waiting forever.
+    const safetyMs = Math.max(2000, text.length * 260) + 9000
+    window.setTimeout(() => {
+      if (job !== speechJobRef.current) return
+      speechAudioRef.current?.pause()
+      finish()
+    }, safetyMs)
+    if (globalSettings.ttsProvider === 'siliconflow') {
+      void synthesizeSpeech(text, globalSettings.ttsTone).then((blob) => {
+        if (job !== speechJobRef.current) return
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        speechAudioRef.current = audio
+        const cleanup = () => {
+          URL.revokeObjectURL(url)
+          if (speechAudioRef.current === audio) speechAudioRef.current = null
+        }
+        audio.onended = () => { cleanup(); finish() }
+        audio.onerror = () => { cleanup(); fallback() }
+        void audio.play().catch(() => { cleanup(); fallback() })
+      }).catch(() => fallback())
+    } else {
+      fallback()
+    }
+  }
+  function speak(text: string) {
+    speakAndThen(text, () => undefined)
   }
   function browserRecognitionConstructor() {
     const recognitionWindow = window as Window & {
@@ -617,6 +713,9 @@ function App() {
         siliconflowImageModel: remote.siliconflow_image_model,
         siliconflowImageFastModel: remote.siliconflow_image_fast_model,
         siliconflowImageEditModel: remote.siliconflow_image_edit_model,
+        ttsProvider: remote.tts_provider,
+        ttsVoice: remote.siliconflow_tts_voice,
+        ttsTone: remote.siliconflow_tts_tone,
         imageProvider: remote.image_provider,
         retentionMinutes: remote.retention_minutes,
       }))
@@ -647,7 +746,10 @@ function App() {
         siliconflow_image_model: settingsDraft.siliconflowImageModel,
         siliconflow_image_fast_model: settingsDraft.siliconflowImageFastModel,
         siliconflow_image_edit_model: settingsDraft.siliconflowImageEditModel,
-        tts_provider: 'browser',
+        siliconflow_tts_model: 'FunAudioLLM/CosyVoice2-0.5B',
+        siliconflow_tts_voice: settingsDraft.ttsVoice,
+        siliconflow_tts_tone: settingsDraft.ttsTone,
+        tts_provider: settingsDraft.ttsProvider,
         image_provider: settingsDraft.imageProvider,
         retention_minutes: settingsDraft.retentionMinutes,
         ...(settingsDraft.openaiApiKey.trim() ? { openai_api_key: settingsDraft.openaiApiKey.trim() } : {}),
@@ -702,6 +804,7 @@ function App() {
     })
   }
   function stopVoice() {
+    cancelSpeechPlayback()
     voiceActiveRef.current = false
     if (voiceTimeoutRef.current) window.clearTimeout(voiceTimeoutRef.current)
     if (voiceMonitorTimerRef.current) window.clearInterval(voiceMonitorTimerRef.current)
@@ -1438,18 +1541,10 @@ function App() {
           setView('card')
           return
         }
-        setGenerationError('图片服务暂时没有返回作品，下面先显示本地梦想卡。')
+        setGenerationError(imageFailureMessage(completedJob.result?.error))
       } catch (error) {
         const reason = error instanceof Error ? error.message : ''
-        setGenerationError(reason === 'image_consent_required'
-          ? '需要先由老师或家长确认，才能把梦想文字发送到硅基流动生成图片。'
-          : reason === 'child_photo_consent_required'
-            ? '需要先由老师或家长单独确认，才能把本张照片发送给硅基流动绘制职业形象。'
-            : reason === 'invalid_reference_image'
-              ? '照片格式暂不支持，请重新拍摄后再试。'
-          : reason === 'siliconflow_api_key_missing'
-            ? '还没有配置硅基流动 API Key。请打开全局设置完成配置。'
-            : '图片服务暂时不可用，下面先显示本地梦想卡。')
+        setGenerationError(requestFailureMessage(reason))
         setApiStatus('local')
       }
     } else if (globalSettings.imageProvider === 'siliconflow') {
@@ -1743,6 +1838,21 @@ function App() {
                     <span className="select-wrap"><select value={settingsDraft.whisperModel} onChange={(event) => setSettingsDraft((current) => ({ ...current, whisperModel: event.target.value as GlobalSettings['whisperModel'] }))}><option value="tiny">tiny · 更快、占用更少</option><option value="base">base · 推荐</option><option value="small">small · 识别更准确、占用更多</option></select><ChevronDown size={16} /></span>
                   </label><p className="settings-help">音频在本机服务处理。更换模型后首次识别时会下载模型文件。</p></>
                 : <p className={'settings-notice ' + (browserRecognitionConstructor() ? '' : 'is-warning')}>{browserRecognitionConstructor() ? '使用浏览器语音识别。浏览器支持和隐私处理方式因版本而异；识别可能需要网络。' : '当前浏览器没有检测到 SpeechRecognition 支持。保存后仍可改用本地 Whisper 或点击选项。'}</p>}
+            </section>
+            <section className="global-settings-section">
+              <h3>语音播报</h3>
+              <label className="field-label">播报声音
+                <span className="select-wrap"><select value={settingsDraft.ttsProvider} onChange={(event) => setSettingsDraft((current) => ({ ...current, ttsProvider: event.target.value as GlobalSettings['ttsProvider'] }))}><option value="siliconflow">硅基流动 CosyVoice（更像真人）</option><option value="browser">浏览器自带语音（离线）</option></select><ChevronDown size={16} /></span>
+              </label>
+              {settingsDraft.ttsProvider === 'siliconflow' && <>
+                <label className="field-label">音色
+                  <span className="select-wrap"><select value={settingsDraft.ttsVoice} onChange={(event) => setSettingsDraft((current) => ({ ...current, ttsVoice: event.target.value }))}><option value="FunAudioLLM/CosyVoice2-0.5B:anna">Anna · 温柔女声</option><option value="FunAudioLLM/CosyVoice2-0.5B:bella">Bella · 亲切女声</option><option value="FunAudioLLM/CosyVoice2-0.5B:claire">Claire · 明亮女声</option><option value="FunAudioLLM/CosyVoice2-0.5B:diana">Diana · 沉稳女声</option><option value="FunAudioLLM/CosyVoice2-0.5B:alex">Alex · 男声</option></select><ChevronDown size={16} /></span>
+                </label>
+                <label className="field-label">语气
+                  <span className="select-wrap"><select value={settingsDraft.ttsTone} onChange={(event) => setSettingsDraft((current) => ({ ...current, ttsTone: event.target.value as GlobalSettings['ttsTone'] }))}><option value="warm">温柔老师 · 语速稍慢</option><option value="lively">活泼姐姐 · 有惊喜感</option><option value="calm">睡前故事 · 平静柔和</option></select><ChevronDown size={16} /></span>
+                </label>
+                <p className="settings-help">使用硅基流动 CosyVoice2 生成语音；需要已配置 API Key。网络或服务失败时会自动回退浏览器语音。</p>
+              </>}
             </section>
             <section className="global-settings-section">
               <h3>大模型对话</h3>

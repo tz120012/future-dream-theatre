@@ -8,6 +8,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -17,7 +18,7 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import httpx
 from pydantic import BaseModel, Field
 
@@ -96,6 +97,11 @@ class GenderGuessResponse(BaseModel):
     gender: Literal["boy", "girl", ""] = ""
 
 
+class TtsRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=400)
+    tone: Literal["warm", "lively", "calm"] | None = None
+
+
 class DreamAnalysisRole(BaseModel):
     label: str = Field(min_length=1, max_length=80)
     reason: str = Field(default="", max_length=180)
@@ -141,9 +147,12 @@ class GlobalSettingsUpdate(BaseModel):
     siliconflow_image_model: str = Field(default="Tongyi-MAI/Z-Image", min_length=1, max_length=160)
     siliconflow_image_fast_model: str = Field(default="Tongyi-MAI/Z-Image-Turbo", min_length=1, max_length=160)
     siliconflow_image_edit_model: str = Field(default="Qwen/Qwen-Image-Edit-2509", min_length=1, max_length=160)
+    siliconflow_tts_model: str = Field(default="FunAudioLLM/CosyVoice2-0.5B", min_length=1, max_length=160)
+    siliconflow_tts_voice: str = Field(default="FunAudioLLM/CosyVoice2-0.5B:anna", min_length=1, max_length=160)
+    siliconflow_tts_tone: Literal["warm", "lively", "calm"] = "warm"
     siliconflow_api_key: str | None = Field(default=None, max_length=1000)
     clear_siliconflow_api_key: bool = False
-    tts_provider: Literal["browser"] = "browser"
+    tts_provider: Literal["browser", "siliconflow"] = "siliconflow"
     image_provider: Literal["mock", "siliconflow"] = "mock"
     retention_minutes: int = Field(default=30, ge=5, le=1440)
 
@@ -165,6 +174,21 @@ class Job(BaseModel):
     session_id: str
     status: str = "queued"
     result: dict[str, Any] | None = None
+
+
+# SiliconFlow's image moderation (anti-deepfake) is probabilistic: the same photo
+# can be flagged once and accepted on the next call (HTTP 451 / code 20021). A
+# retry usually wins, but every attempt costs 25-60 seconds and the frontend gives
+# up after ~3 minutes, so the whole photo pipeline shares one wall-clock budget.
+IMAGE_JOB_BUDGET_SECONDS = 140.0
+
+
+class ImageGenerationError(RuntimeError):
+    """An image call failed for a reason the UI can explain to a teacher."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 MAX_AUDIO_BYTES = 15 * 1024 * 1024
@@ -206,6 +230,7 @@ app.add_middleware(
 sessions: dict[str, Session] = {}
 jobs: dict[str, Job] = {}
 generated_assets: dict[str, dict[str, Any]] = {}
+_tts_cache: dict[tuple[str, str, str], bytes] = {}
 _asset_cleanup_task: asyncio.Task[None] | None = None
 _whisper_model: Any | None = None
 _whisper_model_lock = threading.Lock()
@@ -225,8 +250,11 @@ def _default_app_settings() -> dict[str, Any]:
         "siliconflow_image_model": settings.siliconflow_image_model,
         "siliconflow_image_fast_model": settings.siliconflow_image_fast_model,
         "siliconflow_image_edit_model": settings.siliconflow_image_edit_model,
+        "siliconflow_tts_model": settings.siliconflow_tts_model,
+        "siliconflow_tts_voice": settings.siliconflow_tts_voice,
+        "siliconflow_tts_tone": settings.siliconflow_tts_tone,
         "siliconflow_api_key": settings.siliconflow_api_key,
-        "tts_provider": "browser",
+        "tts_provider": settings.tts_provider,
         "image_provider": settings.image_provider,
         "retention_minutes": settings.retention_minutes,
     }
@@ -936,7 +964,7 @@ async def capabilities() -> dict[str, Any]:
         "available": {
             "stt": ["local_whisper", "browser"],
             "llm": ["template", "openai_compatible", "siliconflow"],
-            "tts": ["browser"],
+            "tts": ["browser", "siliconflow"],
             "image": ["mock", "siliconflow"],
         },
         "remote_model_configured": bool(app_settings["openai_api_key"] or app_settings["siliconflow_api_key"]),
@@ -973,6 +1001,9 @@ async def update_app_settings(payload: GlobalSettingsUpdate) -> dict[str, Any]:
         "siliconflow_image_model": payload.siliconflow_image_model.strip(),
         "siliconflow_image_fast_model": payload.siliconflow_image_fast_model.strip(),
         "siliconflow_image_edit_model": payload.siliconflow_image_edit_model.strip(),
+        "siliconflow_tts_model": payload.siliconflow_tts_model.strip(),
+        "siliconflow_tts_voice": payload.siliconflow_tts_voice.strip(),
+        "siliconflow_tts_tone": payload.siliconflow_tts_tone,
         "tts_provider": payload.tts_provider,
         "image_provider": payload.image_provider,
         "retention_minutes": payload.retention_minutes,
@@ -1121,6 +1152,54 @@ async def transcribe_audio(
                 os.unlink(temp_path)
             except FileNotFoundError:
                 pass
+
+
+_TTS_TONES = {
+    "warm": "用温柔、亲切、像幼儿园老师对孩子说话的语气，语速稍慢，句子之间自然停顿",
+    "lively": "用活泼、开心、充满惊喜的语气，像儿童节目主持人，语速稍快但吐字清楚",
+    "calm": "用平静、安稳、像睡前讲故事的语气，语速偏慢，声音柔和",
+}
+
+
+@app.post("/api/tts")
+async def synthesize_speech(payload: TtsRequest) -> Response:
+    if app_settings["tts_provider"] != "siliconflow":
+        raise HTTPException(status_code=503, detail="siliconflow_tts_not_enabled")
+    api_key = app_settings["siliconflow_api_key"]
+    if not api_key:
+        raise HTTPException(status_code=503, detail="siliconflow_api_key_missing")
+    text = payload.text.strip()
+    tone_key = payload.tone or app_settings["siliconflow_tts_tone"]
+    tone = _TTS_TONES.get(tone_key, _TTS_TONES["warm"])
+    voice = app_settings["siliconflow_tts_voice"]
+    cache_key = (text, voice, tone_key)
+    cached = _tts_cache.get(cache_key)
+    if cached:
+        return Response(content=cached, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+    try:
+        async with httpx.AsyncClient(timeout=40) as client:
+            response = await client.post(
+                f"{SILICONFLOW_BASE_URL}/audio/speech",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": app_settings["siliconflow_tts_model"],
+                    "input": f"{tone} <|endofprompt|>{text}",
+                    "voice": voice,
+                    "response_format": "mp3",
+                    "speed": 0.9,
+                    "gain": 0,
+                },
+            )
+            response.raise_for_status()
+            audio = response.content
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="tts_generation_failed") from exc
+    if not audio or len(audio) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=502, detail="tts_audio_invalid")
+    if len(_tts_cache) > 64:
+        _tts_cache.clear()
+    _tts_cache[cache_key] = audio
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/sessions", response_model=Session)
@@ -1351,7 +1430,9 @@ async def generate_dream_card(session_id: str, payload: DreamCardRequest) -> Job
         try:
             _validate_reference_image(payload.reference_image)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="invalid_reference_image") from exc
+            # Keep the specific reason (size / format / signature) so the page can
+            # tell the teacher whether to retake the photo or pick another file.
+            raise HTTPException(status_code=422, detail=str(exc) or "invalid_reference_image") from exc
     if app_settings["image_provider"] == "siliconflow" and not app_settings["siliconflow_api_key"]:
         raise HTTPException(status_code=503, detail="siliconflow_api_key_missing")
     job = Job(id=str(uuid.uuid4()), session_id=session.id)
@@ -1470,15 +1551,25 @@ def _role_action(role: str) -> str:
     return f"正在实际从事{role}的工作，画面清楚表现这个职业的典型动作、服装和工具"
 
 
-async def _post_image_payload(image_payload: dict[str, Any]) -> tuple[bytes, str]:
-    """POST one image request, retrying SiliconFlow's probabilistic 451 block."""
+async def _post_image_payload(
+    image_payload: dict[str, Any], deadline: float | None = None
+) -> tuple[bytes, str]:
+    """POST one image request, retrying SiliconFlow's probabilistic 451 block.
+
+    `deadline` is a time.monotonic() value shared by the whole photo pipeline so a
+    retrying job always reports back before the frontend stops polling.
+    """
+    if deadline is None:
+        deadline = time.monotonic() + IMAGE_JOB_BUDGET_SECONDS
     async with httpx.AsyncClient(timeout=httpx.Timeout(180, connect=15)) as client:
         result = None
-        last_exc: Exception | None = None
+        last_reason = "upstream"
         # SiliconFlow's content moderation (anti-deepfake) is probabilistic and
         # sometimes flags a real face photo (HTTP 451 / code 20021). It usually
         # passes on retry, so attempt a few times before giving up.
         for attempt in range(4):
+            if attempt and deadline - time.monotonic() < 5:
+                break
             response = await client.post(
                 f"{SILICONFLOW_BASE_URL}/images/generations",
                 headers={"Authorization": f"Bearer {app_settings['siliconflow_api_key']}"},
@@ -1492,17 +1583,19 @@ async def _post_image_payload(image_payload: dict[str, Any]) -> tuple[bytes, str
                     break
                 blocked = True  # empty success payload — treat as retryable
             if blocked or response.status_code >= 500:
-                last_exc = ValueError(f"siliconflow_blocked_or_unavailable:{response.status_code}")
+                last_reason = "moderation" if blocked else "upstream"
                 if attempt < 3:
                     await asyncio.sleep(1.5 * (attempt + 1))
                 continue
+            if response.status_code in {401, 403}:
+                raise ImageGenerationError("auth")
+            if response.status_code in {402, 429}:
+                raise ImageGenerationError("quota")
             response.raise_for_status()
             result = response.json()
             break
         if result is None:
-            if last_exc is not None:
-                raise last_exc
-            raise ValueError("siliconflow_image_missing")
+            raise ImageGenerationError(last_reason)
 
         images = result.get("images") or result.get("data")
         if not isinstance(images, list) or not images or not isinstance(images[0], dict):
@@ -1576,7 +1669,7 @@ def _adult_photo_prompt(payload: DreamCardRequest) -> str:
 
 
 async def _keep_age_photo(
-    payload: DreamCardRequest, face_reference: str, action_text: str
+    payload: DreamCardRequest, face_reference: str, action_text: str, deadline: float
 ) -> tuple[bytes, str]:
     """Fast photo mode: keep the child's face and age, change outfit/scene only."""
     keep_prompt = (
@@ -1590,10 +1683,12 @@ async def _keep_age_photo(
         "negative_prompt": "文字，字母，数字，水印，国旗，品牌标志",
         "image": face_reference,
         "num_inference_steps": 20,
-    })
+    }, deadline)
 
 
-async def _request_siliconflow_photo(payload: DreamCardRequest, reference: str) -> tuple[bytes, str]:
+async def _request_siliconflow_photo(
+    payload: DreamCardRequest, reference: str, deadline: float
+) -> tuple[bytes, str]:
     """Photo mode.
 
     - age_mode="now": keep the child's face and current age (about 20 seconds).
@@ -1605,7 +1700,7 @@ async def _request_siliconflow_photo(payload: DreamCardRequest, reference: str) 
     face_reference = _crop_face_region(reference)
     action_text = payload.action.strip() or _role_action(payload.role)
     if payload.age_mode == "now":
-        return await _keep_age_photo(payload, face_reference, action_text)
+        return await _keep_age_photo(payload, face_reference, action_text, deadline)
 
     template_payload = {
         "model": app_settings["siliconflow_image_fast_model"] or app_settings["siliconflow_image_model"],
@@ -1615,7 +1710,7 @@ async def _request_siliconflow_photo(payload: DreamCardRequest, reference: str) 
         "num_inference_steps": 25,
         "guidance_scale": 7.5,
     }
-    template_bytes, template_type = await _post_image_payload(template_payload)
+    template_bytes, template_type = await _post_image_payload(template_payload, deadline)
     template_data_url = f"data:{template_type};base64," + base64.b64encode(template_bytes).decode()
 
     edit_model = app_settings["siliconflow_image_edit_model"]
@@ -1634,23 +1729,25 @@ async def _request_siliconflow_photo(payload: DreamCardRequest, reference: str) 
                 "image": template_data_url,
                 "image2": face_reference,
                 "num_inference_steps": 30,
-            })
+            }, deadline)
         except Exception:
             import logging
             logging.exception("photo face fusion failed; falling back to current-age portrait")
 
     # Fallback: child's face at the current age.
-    return await _keep_age_photo(payload, face_reference, action_text)
+    return await _keep_age_photo(payload, face_reference, action_text, deadline)
 
 
-async def _request_siliconflow_image(payload: DreamCardRequest) -> tuple[bytes, str]:
+async def _request_siliconflow_image(
+    payload: DreamCardRequest, deadline: float
+) -> tuple[bytes, str]:
     reference = payload.reference_image
     if reference:
         try:
             _validate_reference_image(reference)
         except ValueError as exc:
             raise ValueError("invalid_reference_image") from exc
-        return await _request_siliconflow_photo(payload, reference)
+        return await _request_siliconflow_photo(payload, reference, deadline)
 
     action_text = payload.action.strip() or _role_action(payload.role)
     style_text = _style_descriptor(payload.style)
@@ -1699,7 +1796,7 @@ async def _request_siliconflow_image(payload: DreamCardRequest) -> tuple[bytes, 
         "num_inference_steps": 25,
         "guidance_scale": 7.5,
     }
-    return await _post_image_payload(image_payload)
+    return await _post_image_payload(image_payload, deadline)
 
 
 def _store_generated_image(image_bytes: bytes, content_type: str, session: Session) -> str:
@@ -1723,14 +1820,32 @@ def _remove_session_artifacts(session_id: str) -> None:
             generated_assets.pop(asset_id, None)
 
 
+def _image_error_code(exc: Exception, has_reference: bool) -> str:
+    """Map an upstream image failure to a code the frontend can explain."""
+    if isinstance(exc, ImageGenerationError):
+        if exc.reason == "moderation":
+            # Child photos trip the anti-deepfake filter by mistake far more often
+            # than text-only prompts do, so the advice the teacher needs differs.
+            return "image_reference_rejected" if has_reference else "image_prompt_rejected"
+        if exc.reason == "auth":
+            return "image_auth_failed"
+        if exc.reason == "quota":
+            return "image_quota_exceeded"
+        return "image_upstream_error"
+    if isinstance(exc, (httpx.TimeoutException, asyncio.TimeoutError, TimeoutError)):
+        return "image_timeout"
+    return "image_generation_failed"
+
+
 async def _finish_dream_card_job(job_id: str, session: Session, payload: DreamCardRequest) -> None:
     job = jobs.get(job_id)
     if not job:
         return
     if app_settings["image_provider"] == "siliconflow":
         job.status = "running"
+        deadline = time.monotonic() + IMAGE_JOB_BUDGET_SECONDS
         try:
-            image_bytes, content_type = await _request_siliconflow_image(payload)
+            image_bytes, content_type = await _request_siliconflow_image(payload, deadline)
             asset_id = _store_generated_image(image_bytes, content_type, session)
             job.status = "completed"
             job.result = {
@@ -1740,7 +1855,7 @@ async def _finish_dream_card_job(job_id: str, session: Session, payload: DreamCa
                 "session_id": session.id,
                 "provider": "siliconflow",
             }
-        except Exception:
+        except Exception as exc:
             import logging
             logging.exception("dream card image generation failed")
             job.status = "failed"
@@ -1750,7 +1865,7 @@ async def _finish_dream_card_job(job_id: str, session: Session, payload: DreamCa
                 "image_url": None,
                 "session_id": session.id,
                 "provider": "siliconflow",
-                "error": "image_generation_failed",
+                "error": _image_error_code(exc, has_reference=bool(payload.reference_image)),
             }
         return
 

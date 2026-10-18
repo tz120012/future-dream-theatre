@@ -59,7 +59,10 @@ class Settings:
     # Used when the teacher picks "fast" on the photo page (shorter class time).
     siliconflow_image_fast_model: str = _env("SILICONFLOW_IMAGE_FAST_MODEL", "Tongyi-MAI/Z-Image-Turbo")
     siliconflow_image_edit_model: str = _env("SILICONFLOW_IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit-2509")
-    tts_provider: str = _env("TTS_PROVIDER", "browser")
+    tts_provider: str = _env("TTS_PROVIDER", "siliconflow")
+    siliconflow_tts_model: str = _env("SILICONFLOW_TTS_MODEL", "FunAudioLLM/CosyVoice2-0.5B")
+    siliconflow_tts_voice: str = _env("SILICONFLOW_TTS_VOICE", "FunAudioLLM/CosyVoice2-0.5B:anna")
+    siliconflow_tts_tone: str = _env("SILICONFLOW_TTS_TONE", "warm")
     image_provider: str = _env("IMAGE_PROVIDER", "mock")
     retention_minutes: int = int(_env("RETENTION_MINUTES", "30"))
     openai_base_url: str = _env("OPENAI_BASE_URL", "")

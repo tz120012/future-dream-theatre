@@ -75,9 +75,12 @@ export type ApiGlobalSettings = {
   siliconflow_image_model: string
   siliconflow_image_fast_model: string
   siliconflow_image_edit_model: string
+  siliconflow_tts_model: string
+  siliconflow_tts_voice: string
+  siliconflow_tts_tone: 'warm' | 'lively' | 'calm'
   siliconflow_api_key_configured: boolean
   image_provider: 'mock' | 'siliconflow'
-  tts_provider: 'browser'
+  tts_provider: 'browser' | 'siliconflow'
   retention_minutes: number
 }
 
@@ -117,9 +120,12 @@ export function updateGlobalSettings(settings: {
   siliconflow_image_model: string
   siliconflow_image_fast_model: string
   siliconflow_image_edit_model: string
+  siliconflow_tts_model: string
+  siliconflow_tts_voice: string
+  siliconflow_tts_tone: 'warm' | 'lively' | 'calm'
   siliconflow_api_key?: string
   clear_siliconflow_api_key?: boolean
-  tts_provider: 'browser'
+  tts_provider: 'browser' | 'siliconflow'
   image_provider: 'mock' | 'siliconflow'
   retention_minutes: number
 }) {
@@ -154,6 +160,16 @@ export function analyzeDream(sessionId: string, answers: DreamResponse[], allowO
     method: 'POST',
     body: JSON.stringify({ answers, allow_online_model: allowOnlineModel }),
   })
+}
+
+export async function synthesizeSpeech(text: string, tone?: 'warm' | 'lively' | 'calm'): Promise<Blob> {
+  const response = await fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, tone }),
+  })
+  if (!response.ok) throw new Error(`tts_${response.status}`)
+  return response.blob()
 }
 
 export async function transcribeAudio(audio: Blob, signal?: AbortSignal, language = 'zh'): Promise<{ text: string; provider: string }> {
