@@ -667,6 +667,12 @@ function App() {
         await videoRef.current.play().catch(() => undefined)
       }
       setCameraStatus('ready')
+      const label = stream.getVideoTracks()[0]?.label ?? ''
+      // ToDesk exposes a virtual camera that usually has no real frames; it is
+      // the most common reason Chrome shows a placeholder instead of a preview.
+      if (/todesk/i.test(label)) {
+        setCameraError(`当前摄像头是「${label}」虚拟设备，通常没有真实画面。可以点“上传照片”，或在 ToDesk 设置里开启摄像头重定向后重试。`)
+      }
     } catch (error) {
       setCameraStatus('unavailable')
       // Keep the photo option selected: switching away silently made the page
@@ -677,12 +683,29 @@ function App() {
   function stopCamera() { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; if (videoRef.current) videoRef.current.srcObject = null }
   function capturePhoto() {
     const video = videoRef.current
-    if (!video || video.readyState < 2) { setCameraError('还没有获取到画面，请稍等或选择卡通形象。'); return }
+    if (!video || video.readyState < 2) { setCameraError('还没有获取到画面，请稍等；也可以直接点“上传照片”。'); return }
     const sourceWidth = video.videoWidth || 640
     const sourceHeight = video.videoHeight || 480
     const scale = Math.min(1, 1024 / Math.max(sourceWidth, sourceHeight))
     const canvas = document.createElement('canvas'); canvas.width = Math.round(sourceWidth * scale); canvas.height = Math.round(sourceHeight * scale)
-    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const context = canvas.getContext('2d')
+    context?.drawImage(video, 0, 0, canvas.width, canvas.height)
+    if (context) {
+      // A virtual camera (e.g. ToDesk) can return an all-black or all-white
+      // frame; capturing it would send a useless photo to the image model.
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+      let min = 255
+      let max = 0
+      for (let index = 0; index < pixels.length; index += 4 * 64) {
+        const value = (pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3
+        if (value < min) min = value
+        if (value > max) max = value
+      }
+      if (max - min < 12) {
+        setCameraError('摄像头只返回了黑色或空白画面（常见于 ToDesk 等远程虚拟摄像头）。请点“上传照片”选一张孩子的正脸照。')
+        return
+      }
+    }
     setPhotoPreview(canvas.toDataURL('image/jpeg', .86)); setOnlinePhotoConsent(false); stopCamera(); setPrivacyMessage('照片暂存于本次体验；只有勾选照片授权后才会发送给图片服务')
   }
   async function handlePhotoFile(event: ChangeEvent<HTMLInputElement>) {
