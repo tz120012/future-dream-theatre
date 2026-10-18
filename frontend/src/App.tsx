@@ -1751,10 +1751,11 @@ function App() {
       {view === 'complete' && <section className="complete-layout"><div className="complete-check"><Check size={30} /></div><div className="eyebrow"><span />体验完成</div><h2>这份梦想，<em>先收藏起来。</em></h2><p>你可以下载这张梦想卡，也可以把本次体验的临时数据全部删除。</p><div className="complete-preview"><div className={`mini-dream ${dream.accent}`}><span>{dream.roleIcon}</span></div><div><strong>未来的我：{dream.role}</strong><small>“{dream.quote}”</small></div></div><div className="complete-actions"><button className="primary-button" onClick={downloadCard}><Download size={17} />下载梦想卡</button>{mode === 'classroom' && classRoster.length > 0 && <button className="secondary-button" onClick={() => setView('poster')}><Sparkles size={17} />生成班级海报（{classRoster.length} 位）</button>}<button className="secondary-button" onClick={() => clearSession(true)}><ArrowRight size={17} />下一位小朋友</button><button className="danger-button" onClick={() => clearSession(false)}><Trash2 size={17} />删除当前数据</button></div><div className="privacy-footer"><ShieldCheck size={15} />{privacyMessage}</div></section>}
       {view === 'poster' && <section className="content-section poster-section">
         <div className="section-heading"><div><div className="eyebrow"><span />班级梦想海报</div><h2>我们的梦想</h2><p>全班 {classRoster.length} 位小朋友的梦想角色都在这里。可以下载 PNG 打印或分享。</p></div><div className="heading-icon mint"><Sparkles size={22} /></div></div>
-        <div className="poster-grid" style={{ gridTemplateColumns: `repeat(${classRoster.length <= 1 ? 1 : classRoster.length <= 4 ? 2 : classRoster.length <= 9 ? 3 : 4}, 1fr)` }}>
+        <div className={"poster-grid" + (classRoster.length === 1 ? " single" : "")} style={{ gridTemplateColumns: `repeat(${classRoster.length <= 1 ? 1 : classRoster.length <= 4 ? 2 : classRoster.length <= 9 ? 3 : 4}, 1fr)` }}>
           {classRoster.map((entry) => <div className="poster-cell" key={entry.id}>
             <div className={`poster-cell-art ${entry.accent}`}>
-              {entry.imageUrl ? <img src={entry.imageUrl} alt={`${entry.name}的梦想形象`} /> : <span className="poster-cell-emoji">{entry.roleIcon}</span>}
+              <span className="poster-cell-emoji" aria-hidden>{entry.roleIcon}</span>
+              {entry.imageUrl && <img src={entry.imageUrl} alt={`${entry.name}的梦想形象`} onError={(event) => { event.currentTarget.style.display = 'none' }} />}
             </div>
             <strong className="poster-cell-name">{entry.name}</strong>
             <span className="poster-cell-role">{entry.gender === 'boy' ? '小男孩 · ' : entry.gender === 'girl' ? '小女孩 · ' : ''}未来的{entry.role}</span>
