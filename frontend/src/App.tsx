@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronDown, CircleHelp,
   Download, Image as ImageIcon, LockKeyhole, Mic, Play, RefreshCw,
-  Settings2, ShieldCheck, Sparkles, Trash2, Upload, Volume2, WandSparkles, X, Zap,
+  Settings2, ShieldCheck, Sparkles, Trash2, Upload, Volume2, VolumeX, WandSparkles, X, Zap,
 } from 'lucide-react'
 import './App.css'
 import { addResponse, analyzeConversationTurn, analyzeDream, askFutureSelf, clearRemoteSession, createSession, deleteRemoteSession, guessGenderByName, readGlobalSettings, startDreamCardGeneration, transcribeAudio, updateGlobalSettings, waitForGeneration, type ConversationTurnResult, type DreamAnalysis, type DreamResponse, type FutureSelfTurn } from './services/api'
@@ -66,6 +66,71 @@ const optionEmojiRules: Array<[RegExp, string]> = [
 
 function optionEmoji(text: string): string {
   return optionEmojiRules.find(([pattern]) => pattern.test(text))?.[1] ?? '✨'
+}
+
+type FoxMood = 'happy' | 'speaking' | 'listening' | 'thinking' | 'sad'
+
+let sfxContext: AudioContext | null = null
+
+function getSfxContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  const Ctor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!Ctor) return null
+  if (!sfxContext) sfxContext = new Ctor()
+  if (sfxContext.state === 'suspended') void sfxContext.resume()
+  return sfxContext
+}
+
+function sfxNote(freq: number, delay: number, duration: number, type: OscillatorType = 'sine', volume = 0.05) {
+  const context = getSfxContext()
+  if (!context) return
+  const start = context.currentTime + delay
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  oscillator.type = type
+  oscillator.frequency.setValueAtTime(freq, start)
+  gain.gain.setValueAtTime(0.0001, start)
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.012)
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
+  oscillator.connect(gain).connect(context.destination)
+  oscillator.start(start)
+  oscillator.stop(start + duration + 0.02)
+}
+
+function playPop() { sfxNote(660, 0, .07, 'sine', .04); sfxNote(990, .04, .06, 'sine', .03) }
+function playDing() { sfxNote(1046.5, 0, .16, 'sine', .05); sfxNote(1568, .07, .24, 'sine', .04) }
+function playSparkle() { [880, 1174.7, 1568, 2093].forEach((freq, index) => sfxNote(freq, index * .07, .18, 'triangle', .035)) }
+function playFanfare() { [523.3, 659.3, 784, 1046.5].forEach((freq, index) => sfxNote(freq, index * .12, .32, 'triangle', .05)) }
+
+function FoxMascot({ mood = 'happy', size = 64 }: { mood?: FoxMood; size?: number }) {
+  const eye = (x: number, y: number, close: boolean) => close
+    ? <path d={`M${x - 8} ${y + 2} Q${x} ${y - 7} ${x + 8} ${y + 2}`} fill="none" stroke="#2b2a4a" strokeWidth="4.5" strokeLinecap="round" />
+    : <g><circle cx={x} cy={y} r="5.2" fill="#2b2a4a" /><circle cx={x + 1.8} cy={y - 2} r="1.6" fill="#fff" /></g>
+  return (
+    <svg viewBox="0 0 120 120" width={size} height={size} className={`fox-mascot fox-${mood}`} role="img" aria-label="梦想小伙伴小狐狸">
+      <path d="M22 46 L15 10 L49 30 Z" fill="#ff9a4d" stroke="#2b2a4a" strokeWidth="4.5" strokeLinejoin="round" />
+      <path d="M98 46 L105 10 L71 30 Z" fill="#ff9a4d" stroke="#2b2a4a" strokeWidth="4.5" strokeLinejoin="round" />
+      <path d="M24 39 L21 20 L39 31 Z" fill="#ffd3c2" />
+      <path d="M96 39 L99 20 L81 31 Z" fill="#ffd3c2" />
+      <path d="M60 22 C86 22 104 43 104 67 C104 90 85 104 60 104 C35 104 16 90 16 67 C16 43 34 22 60 22 Z" fill="#ff9a4d" stroke="#2b2a4a" strokeWidth="4.5" />
+      <path d="M60 61 C74 61 87 73 87 84 C87 95 75 101 60 101 C45 101 33 95 33 84 C33 73 46 61 60 61 Z" fill="#fff7ec" stroke="#2b2a4a" strokeWidth="3.5" />
+      <circle cx="34" cy="78" r="7" fill="#ff8a7a" opacity=".55" />
+      <circle cx="86" cy="78" r="7" fill="#ff8a7a" opacity=".55" />
+      {mood === 'happy' && <>{eye(45, 56, true)}{eye(75, 56, true)}</>}
+      {mood === 'speaking' && <>{eye(45, 55, false)}{eye(75, 55, false)}</>}
+      {mood === 'listening' && <>{eye(45, 55, false)}{eye(75, 55, false)}</>}
+      {mood === 'thinking' && <>{eye(45, 55, false)}{eye(75, 55, true)}</>}
+      {mood === 'sad' && <>{eye(45, 57, true)}{eye(75, 57, true)}</>}
+      {mood === 'speaking' && <ellipse cx="60" cy="84" rx="10" ry="8" fill="#2b2a4a" />}
+      {mood === 'speaking' && <ellipse cx="60" cy="87" rx="6" ry="4" fill="#ff8a7a" />}
+      {mood === 'happy' && <path d="M52 83 Q60 91 68 83" fill="none" stroke="#2b2a4a" strokeWidth="4" strokeLinecap="round" />}
+      {mood === 'listening' && <circle cx="60" cy="85" r="4.5" fill="#2b2a4a" />}
+      {mood === 'thinking' && <path d="M53 86 Q60 81 67 86" fill="none" stroke="#2b2a4a" strokeWidth="4" strokeLinecap="round" />}
+      {mood === 'sad' && <path d="M52 88 Q60 81 68 88" fill="none" stroke="#2b2a4a" strokeWidth="4" strokeLinecap="round" />}
+      <path d="M60 72 L54 79 L66 79 Z" fill="#2b2a4a" />
+      {mood === 'thinking' && <text x="96" y="36" fontSize="26" fontWeight="800" fill="#2b2a4a">?</text>}
+    </svg>
+  )
 }
 
 const dreamPresets: Record<string, Dream> = {
@@ -341,6 +406,9 @@ function App() {
   const [style, setStyle] = useState('明亮插画')
   const [photoMode, setPhotoMode] = useState<PhotoMode>('cartoon')
   const [voiceEnabled, setVoiceEnabled] = useState(() => loadLocalSettings().ttsEnabled)
+  const [sfxEnabled, setSfxEnabled] = useState(() => {
+    try { return window.localStorage.getItem('future-dream-sfx') !== 'off' } catch { return true }
+  })
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => loadLocalSettings())
   const [settingsDraft, setSettingsDraft] = useState<GlobalSettings>(() => loadLocalSettings())
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -431,12 +499,25 @@ function App() {
     : view === 'card' ? 4
     : view === 'future' || view === 'complete' || view === 'poster' ? 5
     : 1
-  const mascotMood = voiceError ? 'mood-sad'
-    : isTranscribing ? 'mood-thinking'
-    : isListening || isRecording ? 'mood-listening'
-    : conversationState === 'speaking' ? 'mood-speaking'
-    : conversationState === 'thinking' || conversationState === 'replying' ? 'mood-thinking'
-    : 'mood-happy'
+  const mascotMood: FoxMood = voiceError ? 'sad'
+    : isTranscribing ? 'thinking'
+    : isListening || isRecording ? 'listening'
+    : conversationState === 'speaking' ? 'speaking'
+    : conversationState === 'thinking' || conversationState === 'replying' ? 'thinking'
+    : 'happy'
+  const previousStarsRef = useRef(0)
+  const previousViewRef = useRef<View>(view)
+  useEffect(() => {
+    if (sfxEnabled && starsEarned > previousStarsRef.current) playDing()
+    previousStarsRef.current = starsEarned
+  }, [starsEarned, sfxEnabled])
+  useEffect(() => {
+    if (sfxEnabled && previousViewRef.current !== view) {
+      if (view === 'card') playSparkle()
+      if (view === 'complete') playFanfare()
+    }
+    previousViewRef.current = view
+  }, [view, sfxEnabled])
 
   const statusLabel = useMemo(() => ({
     entry: '准备开始', setup: '课堂设置', device: '设备检查', welcome: '欢迎来到梦想剧场',
@@ -610,6 +691,13 @@ function App() {
     setGlobalSettings((current) => {
       const next = { ...current, ttsEnabled: nextEnabled }
       saveLocalSettings(next)
+      return next
+    })
+  }
+  function toggleSfxEnabled() {
+    setSfxEnabled((current) => {
+      const next = !current
+      try { window.localStorage.setItem('future-dream-sfx', next ? 'on' : 'off') } catch { /* ignore */ }
       return next
     })
   }
@@ -1618,7 +1706,11 @@ function App() {
     const previousView = previous[view]; if (previousView) setView(previousView)
   }
 
-  return <div className="app-shell">
+  return <div className="app-shell" onClickCapture={(event) => {
+    if (!sfxEnabled) return
+    const target = event.target
+    if (target instanceof Element && target.closest('button:not(:disabled), [role="button"]:not([aria-disabled="true"])')) playPop()
+  }}>
     <div className="kid-scene" aria-hidden="true">
       <span className="kid-sun" />
       <span className="kid-cloud cloud-one" />
@@ -1692,12 +1784,12 @@ function App() {
           <div className="global-settings-actions"><button className="secondary-button" onClick={() => setSettingsOpen(false)}>取消</button><button className="primary-button" onClick={() => void saveSettings()} disabled={settingsSaving}>{settingsSaving ? '正在保存…' : '保存全局设置'}</button></div>
         </section>
       </div>}
-    <header className="topbar"><div className="brand-lockup"><button className="brand-mark" aria-label="全局设置" title="全局设置" onClick={openGlobalSettings}><Sparkles size={21} /></button><div><p className="brand-name">未来梦想剧场</p><p className="brand-tagline">每个梦想，都值得被看见</p></div></div><div className="topbar-meta"><span className="session-pill"><span className="status-dot" />{mode === 'classroom' ? `课堂模式 · 第 ${sessionNumber} 位` : '家庭模式'}</span>{view !== 'entry' && <button className="icon-button" title="返回入口" onClick={() => clearSession(false)}><X size={18} /></button>}</div></header>
+    <header className="topbar"><div className="brand-lockup"><button className="brand-mark" aria-label="全局设置" title="全局设置" onClick={openGlobalSettings}><Sparkles size={21} /></button><div><p className="brand-name">未来梦想剧场</p><p className="brand-tagline">每个梦想，都值得被看见</p></div></div><div className="topbar-meta"><button className="icon-button sfx-button" aria-label={sfxEnabled ? '关闭音效' : '开启音效'} title={sfxEnabled ? '关闭音效' : '开启音效'} onClick={toggleSfxEnabled}>{sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}</button><span className="session-pill"><span className="status-dot" />{mode === 'classroom' ? `课堂模式 · 第 ${sessionNumber} 位` : '家庭模式'}</span>{view !== 'entry' && <button className="icon-button" title="返回入口" onClick={() => clearSession(false)}><X size={18} /></button>}</div></header>
     <main className={`main-content view-${view}`}>
       {view !== 'entry' && view !== 'setup' && view !== 'complete' && view !== 'poster' && <div className="journey-bar"><div className="journey-label"><span>当前步骤</span><strong>{statusLabel}</strong></div><div className="star-progress" aria-label={`进度 ${starsEarned}/5`}>{[1, 2, 3, 4, 5].map((star) => <span key={star} className={star <= starsEarned ? 'on' : ''}>⭐</span>)}</div><span className={`privacy-label ${apiStatus}`}><LockKeyhole size={14} />{apiStatus === 'connected' ? '本地服务已连接' : '离线也可体验'}</span></div>}
       {view === 'entry' && <section className="entry-layout">
         <div className="entry-copy">
-          <div className="entry-mascot"><span className="mascot-face">🦊</span><span className="mascot-bubble">嗨！我是梦想小伙伴</span></div>
+          <div className="entry-mascot"><span className="mascot-face"><FoxMascot mood="happy" size={46} /></span><span className="mascot-bubble">嗨！我是梦想小伙伴</span></div>
           <div className="eyebrow"><span />儿童想象力体验</div>
           <h1>把你的梦想，<br /><em>变成一张魔法卡！</em></h1>
           <p className="entry-description">告诉我想做什么，我们一起把它画出来。</p>
@@ -1754,7 +1846,7 @@ function App() {
       </div>}
       {view === 'device' && <section className="content-section narrow-section"><div className="section-heading"><div><div className="eyebrow"><span />设备检查</div><h2>让我们听见，也看见</h2><p>设备只会在你选择使用时打开。摄像头和麦克风可以分别跳过。</p></div><div className="heading-icon mint"><Camera size={22} /></div></div><div className="device-grid"><div className="device-preview"><Camera size={26} /><span>摄像头权限检查</span><small>{cameraStatus === 'ready' ? '已连接' : cameraStatus === 'checking' ? '正在检查…' : cameraStatus === 'unavailable' ? '不可用；可选卡通形象' : '点击“检查设备”测试'}</small></div><div className="device-check-list"><div className={`device-row ${microphoneStatus === 'ready' ? 'ready' : ''}`}><span className="device-icon"><Mic size={18} /></span><div><strong>麦克风</strong><small>{microphoneStatus === 'ready' ? '已连接' : microphoneStatus === 'checking' ? '正在检查…' : microphoneStatus === 'unavailable' ? '不可用；仍可点选答案' : '点击“检查设备”测试'}</small></div><span className="device-status">{microphoneStatus === 'ready' && <CheckCircle2 size={18} />}</span></div><div className="device-row"><span className="device-icon"><Volume2 size={18} /></span><div><strong>扬声器</strong><small>{voiceEnabled ? '开启后会播放引导语音' : '语音播报已关闭'}</small></div></div><button className="secondary-button device-test" onClick={checkDevices} disabled={deviceStatus === 'checking'}><RefreshCw size={17} className={deviceStatus === 'checking' ? 'spin' : ''} />{deviceStatus === 'checking' ? '正在检查…' : '检查设备'}</button></div></div>{cameraError && <div className="warning-callout"><CircleHelp size={18} /><span>{cameraError}</span></div>}<div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回设置</button><button className="primary-button" onClick={() => void startInterview()}>开始体验 <ArrowRight size={17} /></button></div></section>}
       {view === 'welcome' && <section className="welcome-layout child-welcome-layout">
-        <div className="guide-portrait"><div className={`guide-face ${mascotMood}`}>🦊</div><span className="guide-status"><span />准备好了</span></div>
+        <div className="guide-portrait"><div className={`guide-face mood-${mascotMood}`}><FoxMascot mood={mascotMood} size={104} /></div><span className="guide-status"><span />准备好了</span></div>
         <div className="welcome-copy">
           <div className="eyebrow"><span />你好呀</div>
           <h2>我们一起<br /><em>想一想未来！</em></h2>
@@ -1769,7 +1861,7 @@ function App() {
       </section>}
       {view === 'interview' && <section className="content-section interview-section child-interview-section">
         <div className="chat-companion-bar">
-          <div className={`guide-face chat-guide-face ${mascotMood}`}>🦊</div>
+          <div className={`guide-face chat-guide-face mood-${mascotMood}`}><FoxMascot mood={mascotMood} size={46} /></div>
           <div className="chat-companion-info">
             <strong>梦想小伙伴</strong>
             <span className="chat-status-dot">{conversationState === 'thinking' ? '正在想一想…' : conversationState === 'speaking' ? '正在说话…' : conversationState === 'replying' ? '和你聊天中' : conversationState === 'generating' ? '准备画出来…' : '在线'}</span>
@@ -1777,11 +1869,11 @@ function App() {
         </div>
         <div className="chat-bubbles" ref={chatBubblesRef}>
           {chatMessages.map((msg) => <div className={`chat-bubble-row ${msg.role === 'system' ? 'row-system' : 'row-child'}`} key={msg.id}>
-            {msg.role === 'system' && <div className="chat-avatar">🦊</div>}
+            {msg.role === 'system' && <div className="chat-avatar"><FoxMascot mood="happy" size={26} /></div>}
             <div className={`chat-bubble ${msg.role === 'system' ? 'bubble-system' : 'bubble-child'}`}>{msg.text}</div>
           </div>)}
           {conversationState === 'thinking' && <div className="chat-bubble-row row-system">
-            <div className="chat-avatar">🦊</div>
+            <div className="chat-avatar"><FoxMascot mood="happy" size={26} /></div>
             <div className="chat-bubble bubble-system chat-typing-wrap"><span className="chat-typing"><i /><i /><i /></span></div>
           </div>}
         </div>

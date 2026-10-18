@@ -321,6 +321,12 @@ h1 em,h2 em{font-style:normal;color:var(--ink);background:linear-gradient(180deg
 .guide-face.mood-sad{transform:rotate(7deg);filter:grayscale(.35)}
 .guide-face.mood-happy{animation:fox-breathe 3.6s ease-in-out infinite}
 @keyframes fox-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+.fox-mascot{display:block}
+.guide-face .fox-mascot{width:86%;height:86%}
+.chat-guide-face .fox-mascot{width:82%;height:82%}
+.mascot-face .fox-mascot{width:78%;height:78%}
+.chat-avatar .fox-mascot{width:82%;height:82%}
+.sfx-button{margin-right:2px}
 @media(max-width:640px){.teacher-drawer{width:100%;height:100dvh;border-radius:0;padding:34px 20px 24px}}
 .chat-guide-face{width:58px;height:58px;font-size:30px;background:var(--yellow);color:var(--ink);border-radius:50%}
 .chat-avatar{width:38px;height:38px;font-size:20px;background:var(--yellow);color:var(--ink);border-radius:50%}
