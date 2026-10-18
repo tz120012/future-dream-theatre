@@ -424,7 +424,13 @@ function App() {
     }
   }, [chatMessages, view, conversationState])
   const currentQuestion = questions[questionIndex]
-  const progress = view === 'analyzing' ? 78 : view === 'dream-review' ? 84 : Math.round(((questionIndex + (view === 'interview' ? 0 : 1)) / questions.length) * 100)
+  const starsEarned = view === 'entry' ? 0
+    : view === 'setup' || view === 'device' || view === 'welcome' ? 1
+    : view === 'interview' ? (conversationState === 'generating' || conversationState === 'completed' || adaptiveTurns.length >= 2 ? 3 : 2)
+    : view === 'analyzing' || view === 'dream-review' || view === 'photo' || view === 'generating' ? 3
+    : view === 'card' ? 4
+    : view === 'future' || view === 'complete' || view === 'poster' ? 5
+    : 1
 
   const statusLabel = useMemo(() => ({
     entry: '准备开始', setup: '课堂设置', device: '设备检查', welcome: '欢迎来到梦想剧场',
@@ -625,16 +631,23 @@ function App() {
     setIsListening(false); setIsRecording(false); setIsTranscribing(false)
     if (view === 'interview') setConversationState('paused')
   }
-  async function ensureSession(): Promise<string | null> {
+  async function ensureSession(sessionMode = mode): Promise<string | null> {
     if (sessionId) return sessionId
     try {
-      const session = await createSession({ mode, age_group: ageGroup, theme, style })
+      const session = await createSession({ mode: sessionMode, age_group: ageGroup, theme, style })
       setSessionId(session.id); setApiStatus('connected'); return session.id
     } catch {
       setApiStatus('local'); return null
     }
   }
-  function chooseMode(nextMode: 'classroom' | 'family') { setMode(nextMode); setOnlineTextConsent(false); setOnlineImageConsent(false); setView('setup') }
+  function chooseMode(nextMode: 'classroom' | 'family') {
+    setMode(nextMode)
+    setOnlineTextConsent(false)
+    setOnlineImageConsent(false)
+    // Skip the teacher setup + device screens: children go straight to the
+    // welcome screen, and teachers open "老师准备" only when they need it.
+    void startInterview(nextMode)
+  }
   function beginDeviceCheck() {
     setView('device'); setDeviceStatus('idle'); setCameraStatus('idle'); setMicrophoneStatus('idle'); setCameraError('')
   }
@@ -761,13 +774,16 @@ function App() {
       setCameraError('无法读取这张照片，请换一张正脸照试试。')
     }
   }
-  async function startInterview() {
-    await ensureSession()
+  async function startInterview(sessionMode = mode) {
     setQuestionIndex(0); setConversationTurns([]); setAdaptiveTurns([]); setAdaptiveResult(null); setShowFallbackChoices(false); setChatMessages([])
     setConversationState('idle'); setDreamAnalysis(null); setSelectedDreamRole(''); setCustomDreamRole('')
     setFutureReply(''); setFutureInput(''); setFuturePending(false); setFutureTurns([]); setView('welcome'); speak('你好呀！我们来一起想象未来的你。')
+    // Create the session in the background so the welcome screen appears at
+    // once; the first real turn creates it if this has not finished yet.
+    await ensureSession(sessionMode)
   }
   function beginChildConversation() {
+    if (!sessionId) void ensureSession()
     setView('interview')
     setConversationState('speaking')
     setVoiceError('')
@@ -1348,6 +1364,7 @@ function App() {
     generationTimerRef.current = window.setTimeout(() => setView('card'), 1500)
   }
   function continueFromPhoto() {
+    if (globalSettings.imageProvider === 'siliconflow' && !onlineImageConsent) return
     if (globalSettings.imageProvider === 'siliconflow' && photoMode === 'photo' && photoPreview && !onlinePhotoConsent) return
     stopCamera(); setView('generating'); setPrivacyMessage('生成中的临时素材会在本次体验结束后清理'); void generateCard()
   }
@@ -1671,7 +1688,7 @@ function App() {
       </div>}
     <header className="topbar"><div className="brand-lockup"><button className="brand-mark" aria-label="全局设置" title="全局设置" onClick={openGlobalSettings}><Sparkles size={21} /></button><div><p className="brand-name">未来梦想剧场</p><p className="brand-tagline">每个梦想，都值得被看见</p></div></div><div className="topbar-meta"><span className="session-pill"><span className="status-dot" />{mode === 'classroom' ? `课堂模式 · 第 ${sessionNumber} 位` : '家庭模式'}</span>{view !== 'entry' && <button className="icon-button" title="返回入口" onClick={() => clearSession(false)}><X size={18} /></button>}</div></header>
     <main className={`main-content view-${view}`}>
-      {view !== 'entry' && view !== 'complete' && view !== 'poster' && <div className="journey-bar"><div className="journey-label"><span>当前步骤</span><strong>{statusLabel}</strong></div><div className="journey-progress" aria-label={`当前进度 ${progress}%`}><span style={{ width: `${Math.max(8, progress)}%` }} /></div><span className={`privacy-label ${apiStatus}`}><LockKeyhole size={14} />{apiStatus === 'connected' ? '本地服务已连接' : '离线也可体验'}</span></div>}
+      {view !== 'entry' && view !== 'complete' && view !== 'poster' && <div className="journey-bar"><div className="journey-label"><span>当前步骤</span><strong>{statusLabel}</strong></div><div className="star-progress" aria-label={`进度 ${starsEarned}/5`}>{[1, 2, 3, 4, 5].map((star) => <span key={star} className={star <= starsEarned ? 'on' : ''}>⭐</span>)}</div><span className={`privacy-label ${apiStatus}`}><LockKeyhole size={14} />{apiStatus === 'connected' ? '本地服务已连接' : '离线也可体验'}</span></div>}
       {view === 'entry' && <section className="entry-layout">
         <div className="entry-copy">
           <div className="entry-mascot"><span className="mascot-face">🦊</span><span className="mascot-bubble">嗨！我是梦想小伙伴</span></div>
@@ -1701,7 +1718,7 @@ function App() {
         </div>
       </section>}
       {view === 'setup' && <section className="content-section narrow-section">
-        <div className="section-heading"><div><div className="eyebrow"><span />{mode === 'classroom' ? '课堂准备' : '家庭准备'}</div><h2>先把这场体验准备好</h2><p>可以直接使用默认设置，整个流程大约需要 3-5 分钟。</p></div><div className="heading-icon coral"><Settings2 size={22} /></div></div>
+        <div className="section-heading"><div><div className="eyebrow"><span />老师准备</div><h2>老师准备一下</h2><p>孩子只负责玩；这里可以调整年龄、主题和授权，设备检查是可选的。</p></div><div className="heading-icon coral"><Settings2 size={22} /></div></div>
         <div className="settings-grid">
           <label className="field-label">年龄段<span className="select-wrap"><select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)}><option>3-4 岁</option><option>5-6 岁</option><option>6 岁以上</option></select><ChevronDown size={16} /></span></label>
           <label className="field-label">本次主题<span className="select-wrap"><select value={theme} onChange={(event) => setTheme(event.target.value)}><option>自由想象</option><option>帮助别人</option><option>自然和动物</option><option>太空探险</option></select><ChevronDown size={16} /></span></label>
@@ -1722,11 +1739,25 @@ function App() {
         </div></div>}
         <div className="section-footer">
           <button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回</button>
-          <button className="primary-button" onClick={beginDeviceCheck} disabled={globalSettings.imageProvider === 'siliconflow' && !onlineImageConsent}>检查设备并开始 <ArrowRight size={17} /></button>
+          <button className="secondary-button" onClick={beginDeviceCheck}>检查设备</button>
+          <button className="primary-button" onClick={() => void startInterview()} disabled={globalSettings.imageProvider === 'siliconflow' && !onlineImageConsent}>开始体验 <ArrowRight size={17} /></button>
         </div>
       </section>}
-      {view === 'device' && <section className="content-section narrow-section"><div className="section-heading"><div><div className="eyebrow"><span />设备检查</div><h2>让我们听见，也看见</h2><p>设备只会在你选择使用时打开。摄像头和麦克风可以分别跳过。</p></div><div className="heading-icon mint"><Camera size={22} /></div></div><div className="device-grid"><div className="device-preview"><Camera size={26} /><span>摄像头权限检查</span><small>{cameraStatus === 'ready' ? '已连接' : cameraStatus === 'checking' ? '正在检查…' : cameraStatus === 'unavailable' ? '不可用；可选卡通形象' : '点击“检查设备”测试'}</small></div><div className="device-check-list"><div className={`device-row ${microphoneStatus === 'ready' ? 'ready' : ''}`}><span className="device-icon"><Mic size={18} /></span><div><strong>麦克风</strong><small>{microphoneStatus === 'ready' ? '已连接' : microphoneStatus === 'checking' ? '正在检查…' : microphoneStatus === 'unavailable' ? '不可用；仍可点选答案' : '点击“检查设备”测试'}</small></div><span className="device-status">{microphoneStatus === 'ready' && <CheckCircle2 size={18} />}</span></div><div className="device-row"><span className="device-icon"><Volume2 size={18} /></span><div><strong>扬声器</strong><small>{voiceEnabled ? '开启后会播放引导语音' : '语音播报已关闭'}</small></div></div><button className="secondary-button device-test" onClick={checkDevices} disabled={deviceStatus === 'checking'}><RefreshCw size={17} className={deviceStatus === 'checking' ? 'spin' : ''} />{deviceStatus === 'checking' ? '正在检查…' : '检查设备'}</button></div></div>{cameraError && <div className="warning-callout"><CircleHelp size={18} /><span>{cameraError}</span></div>}<div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回设置</button><button className="primary-button" onClick={startInterview}>开始体验 <ArrowRight size={17} /></button></div></section>}
-      {view === 'welcome' && <section className="welcome-layout child-welcome-layout"><div className="guide-portrait"><div className="guide-face">🦊</div><span className="guide-status"><span />准备好了</span></div><div className="welcome-copy"><div className="eyebrow"><span />你好呀</div><h2>我们一起<br /><em>想一想未来！</em></h2><p>小伙伴会问你一个问题。你想说什么，就说什么。</p><button className="primary-button large" onClick={beginChildConversation}><Mic size={19} />开始聊天 <ArrowRight size={18} /></button><button className="text-button" onClick={() => setView('setup')}><Settings2 size={15} />老师设置</button></div></section>}
+      {view === 'device' && <section className="content-section narrow-section"><div className="section-heading"><div><div className="eyebrow"><span />设备检查</div><h2>让我们听见，也看见</h2><p>设备只会在你选择使用时打开。摄像头和麦克风可以分别跳过。</p></div><div className="heading-icon mint"><Camera size={22} /></div></div><div className="device-grid"><div className="device-preview"><Camera size={26} /><span>摄像头权限检查</span><small>{cameraStatus === 'ready' ? '已连接' : cameraStatus === 'checking' ? '正在检查…' : cameraStatus === 'unavailable' ? '不可用；可选卡通形象' : '点击“检查设备”测试'}</small></div><div className="device-check-list"><div className={`device-row ${microphoneStatus === 'ready' ? 'ready' : ''}`}><span className="device-icon"><Mic size={18} /></span><div><strong>麦克风</strong><small>{microphoneStatus === 'ready' ? '已连接' : microphoneStatus === 'checking' ? '正在检查…' : microphoneStatus === 'unavailable' ? '不可用；仍可点选答案' : '点击“检查设备”测试'}</small></div><span className="device-status">{microphoneStatus === 'ready' && <CheckCircle2 size={18} />}</span></div><div className="device-row"><span className="device-icon"><Volume2 size={18} /></span><div><strong>扬声器</strong><small>{voiceEnabled ? '开启后会播放引导语音' : '语音播报已关闭'}</small></div></div><button className="secondary-button device-test" onClick={checkDevices} disabled={deviceStatus === 'checking'}><RefreshCw size={17} className={deviceStatus === 'checking' ? 'spin' : ''} />{deviceStatus === 'checking' ? '正在检查…' : '检查设备'}</button></div></div>{cameraError && <div className="warning-callout"><CircleHelp size={18} /><span>{cameraError}</span></div>}<div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回设置</button><button className="primary-button" onClick={() => void startInterview()}>开始体验 <ArrowRight size={17} /></button></div></section>}
+      {view === 'welcome' && <section className="welcome-layout child-welcome-layout">
+        <div className="guide-portrait"><div className="guide-face">🦊</div><span className="guide-status"><span />准备好了</span></div>
+        <div className="welcome-copy">
+          <div className="eyebrow"><span />你好呀</div>
+          <h2>我们一起<br /><em>想一想未来！</em></h2>
+          <p>小伙伴会问你一个问题。你想说什么，就说什么。</p>
+          <button className="primary-button large" onClick={beginChildConversation}><Mic size={19} />开始聊天 <ArrowRight size={18} /></button>
+          <button className="text-button" onClick={() => setView('setup')}><Settings2 size={15} />老师准备</button>
+          {globalSettings.llmProvider !== 'template' && <label className="online-model-consent welcome-consent">
+            <input type="checkbox" checked={onlineTextConsent} onChange={(event) => setOnlineTextConsent(event.target.checked)} />
+            <span>老师已确认：可以把聊天文字发送给{globalSettings.llmProvider === 'siliconflow' ? '硅基流动' : '在线模型'}；不勾选就用内置模板。</span>
+          </label>}
+        </div>
+      </section>}
       {view === 'interview' && <section className="content-section interview-section child-interview-section">
         <div className="chat-companion-bar">
           <div className="guide-face chat-guide-face">🦊</div>
@@ -1818,7 +1849,8 @@ function App() {
         </div>}
         {globalSettings.imageProvider === "siliconflow" && photoMode === "photo" && photoPreview && <div className="online-model-callout photo-consent-callout"><ImageIcon size={18} /><div><strong>{onlinePhotoConsent ? "已授权本次照片用于生成" : "照片上传需要单独确认"}</strong><p>勾选后，本张照片会作为参考图发送给硅基流动，用来生成孩子从事该职业的真实照片形象（按上面选择的年龄样式）。本项目后端不会保存原始照片；在线服务的数据处理和留存遵循服务商政策。</p><label className="online-model-consent"><input type="checkbox" checked={onlinePhotoConsent} onChange={(event) => setOnlinePhotoConsent(event.target.checked)} /><span>{mode === "classroom" ? "老师已确认家长或监护人同意发送本张照片" : "家长或监护人已同意发送本张照片"}</span></label></div></div>}
         {globalSettings.imageProvider === "mock" && photoMode === "photo" && photoPreview && <div className="warning-callout"><CircleHelp size={18} /><span>照片仍留在本机，但当前 Mock 预览不会用照片生成职业形象。请在全局设置启用硅基流动图片生成。</span></div>}
-        <div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回梦想方向</button><button className="primary-button" onClick={continueFromPhoto} disabled={photoMode === "photo" && (!photoPreview || (globalSettings.imageProvider === "siliconflow" && !onlinePhotoConsent))}>开始生成 <WandSparkles size={17} /></button></div>
+        {globalSettings.imageProvider === "siliconflow" && <div className="online-model-callout photo-image-consent"><ImageIcon size={18} /><div><strong>{onlineImageConsent ? "已确认用文字生成图片" : "生成图片需要确认"}</strong><p>会把角色、场景和风格文字发送给硅基流动生成图片；不会自动发送照片。</p><label className="online-model-consent"><input type="checkbox" checked={onlineImageConsent} onChange={(event) => setOnlineImageConsent(event.target.checked)} /><span>{mode === "classroom" ? "老师已确认发送上述文字来生成图片" : "家长或监护人已确认发送上述文字来生成图片"}</span></label></div></div>}
+        <div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回梦想方向</button><button className="primary-button" onClick={continueFromPhoto} disabled={(photoMode === "photo" && (!photoPreview || (globalSettings.imageProvider === "siliconflow" && !onlinePhotoConsent))) || (globalSettings.imageProvider === "siliconflow" && !onlineImageConsent)}>开始生成 <WandSparkles size={17} /></button></div>
       </section>}
       {view === 'generating' && <section className="generation-layout"><div className="generation-visual"><div className="generation-sun" /><div className="generation-land" /><span className="generation-icon">{dream.roleIcon}</span><div className="generation-spark spark-a">✦</div><div className="generation-spark spark-b">✧</div></div><div className="generation-copy"><div className="eyebrow"><span />正在创作</div><h2>正在画出<br /><em>想象中的未来。</em></h2><p>我们正在准备「{dream.scene}」的梦想场景。</p><div className="loading-line"><span /></div><small>{globalSettings.imageProvider === 'siliconflow' ? (photoMode === 'photo' && onlinePhotoConsent ? (photoAgeMode === 'grown' ? '真人照片模式会先生成成年职业形象，再融合孩子的脸，通常约 1 分钟。' : '真人照片模式会保留孩子现在的脸，换上职业服装，通常约 20 秒。') : '正在用硅基流动创作形象，通常需要几十秒。') : '使用本地 Mock 预览。'}</small><button className="text-button" onClick={() => setView('card')}>先看看本地预览 <ArrowRight size={16} /></button></div></section>}
       {view === 'card' && <section className="card-layout"><div className={'dream-art ' + dream.accent + (generatedImageUrl ? ' has-generated-image' : '')}>{generatedImageUrl && <img className="dream-generated-image" src={generatedImageUrl} alt={dream.role + '在' + dream.scene + '中的职业形象'} />}<div className="dream-art-top"><span>未来梦想剧场</span><span>第 {sessionNumber} 位</span></div><div className="dream-art-scene"><div className="scene-moon" /><div className="scene-hill hill-back" /><div className="scene-hill hill-front" /><span className="dream-emoji">{dream.roleIcon}</span></div><div className="dream-art-footer"><span>{dream.scene}</span><strong>{dream.role}</strong></div>{photoPreview && <div className="dream-child-photo"><img src={photoPreview} alt="本机保留的脸部参考照片" /><span>{generatedImageUrl ? '本机参考照' : '梦想旅人'}</span></div>}</div><div className="card-copy"><div className="eyebrow"><span />你的梦想卡</div><h2>未来的我：<br /><em>{dream.role}</em></h2><blockquote>“{dream.quote}”</blockquote><p className="card-note"><Sparkles size={15} />{generatedImageUrl ? (photoMode === 'photo' && photoPreview && onlinePhotoConsent ? '已根据单独授权的脸部照片生成真实职业照片形象。' : photoMode === 'none' ? '已生成职业工作场景插画。' : '已生成卡通职业形象插画。') : generationError || '这是本地梦想卡预览。'}</p><div className="card-actions"><button className="primary-button" onClick={startFutureSelf}><Play size={17} />和未来的自己聊聊</button><button className="secondary-button" onClick={downloadCard}><Download size={17} />下载梦想卡</button><button className="text-button" onClick={regenerate}><RefreshCw size={16} />重新生成</button></div></div></section>}
