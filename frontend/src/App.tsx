@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronDown, CircleHelp,
-  Download, Heart, Image as ImageIcon, LockKeyhole, Mic, Play, RefreshCw,
+  Download, Image as ImageIcon, LockKeyhole, Mic, Play, RefreshCw,
   Settings2, ShieldCheck, Sparkles, Trash2, Upload, Volume2, WandSparkles, X, Zap,
 } from 'lucide-react'
 import './App.css'
@@ -48,6 +48,25 @@ const questions = [
   { label: '如果长大后可以做一件有趣的事，你想做什么？', helper: '没有正确答案，想象一下就好。', options: ['探索大海', '飞去太空', '设计一座城', '讲故事给大家听'] },
   { label: '你希望在哪里完成这件事？', helper: '你可以选择一个地方，也可以自己说。', options: ['彩色森林', '海边实验室', '月亮基地', '热闹的城市'] },
 ]
+
+const optionEmojiRules: Array<[RegExp, string]> = [
+  [/动物|小狗|小猫|宠物/u, '🐰'],
+  [/发明|机器人/u, '🛠️'],
+  [/植物|花|树/u, '🌱'],
+  [/不知道/u, '🤔'],
+  [/大海|海洋/u, '🌊'],
+  [/太空|星星|月亮/u, '🚀'],
+  [/城市|设计/u, '🏙️'],
+  [/故事|讲/u, '📖'],
+  [/森林/u, '🌳'],
+  [/实验/u, '🧪'],
+  [/基地/u, '🌕'],
+  [/热闹/u, '🎠'],
+]
+
+function optionEmoji(text: string): string {
+  return optionEmojiRules.find(([pattern]) => pattern.test(text))?.[1] ?? '✨'
+}
 
 const dreamPresets: Record<string, Dream> = {
   '帮助小动物': { role: '森林动物医生', roleIcon: '🦉', scene: '彩色森林里的小小诊所', quote: '我想让每一只小动物都健康、快乐。', accent: 'sage' },
@@ -341,6 +360,7 @@ function App() {
   const [childGender, setChildGender] = useState<ChildGender>('')
   const [nameInput, setNameInput] = useState('')
   const [nameStage, setNameStage] = useState<'ask' | 'done'>('ask')
+  const [showNamePanel, setShowNamePanel] = useState(false)
   const [genderGuessing, setGenderGuessing] = useState(false)
   const [classRoster, setClassRoster] = useState<RosterEntry[]>([])
   const nameBubbleAddedRef = useRef(false)
@@ -751,7 +771,7 @@ function App() {
     setView('interview')
     setConversationState('speaking')
     setVoiceError('')
-    setNameStage('ask'); setChildName(''); setChildGender(''); setNameInput('')
+    setNameStage('ask'); setChildName(''); setChildGender(''); setNameInput(''); setShowNamePanel(false)
     nameBubbleAddedRef.current = false
     const greeting = '你好呀！我是梦想小伙伴。你叫什么名字呀？'
     setChatMessages([{ id: `sys-${Date.now()}`, role: 'system', text: greeting }])
@@ -788,6 +808,7 @@ function App() {
     if (!name) {
       const askAgain = '我没有听清名字，可以再说一次吗？老师也可以帮忙写在下面。'
       setChatMessages((current) => [...current, { id: `sys-${Date.now()}`, role: 'system', text: askAgain }])
+      setShowNamePanel(true)
       speakAndThen(askAgain, () => { setConversationState('idle') })
       return
     }
@@ -1575,6 +1596,21 @@ function App() {
   }
 
   return <div className="app-shell">
+    <div className="kid-scene" aria-hidden="true">
+      <span className="kid-sun" />
+      <span className="kid-cloud cloud-one" />
+      <span className="kid-cloud cloud-two" />
+      <span className="kid-hill hill-one" />
+      <span className="kid-hill hill-two" />
+      <span className="kid-sticker sticker-a">🦊</span>
+      <span className="kid-sticker sticker-b">🚗</span>
+      <span className="kid-sticker sticker-c">🦕</span>
+      <span className="kid-sticker sticker-d">🌈</span>
+      <span className="kid-sticker sticker-e">🐼</span>
+      <span className="kid-sticker sticker-f">🚀</span>
+      <span className="kid-sticker sticker-g">🐙</span>
+      <span className="kid-sticker sticker-h">🎈</span>
+    </div>
       {settingsOpen && <div className="settings-overlay" onClick={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false) }}>
         <section className="global-settings-panel" role="dialog" aria-modal="true" aria-labelledby="global-settings-title">
           <div className="global-settings-heading">
@@ -1636,7 +1672,34 @@ function App() {
     <header className="topbar"><div className="brand-lockup"><button className="brand-mark" aria-label="全局设置" title="全局设置" onClick={openGlobalSettings}><Sparkles size={21} /></button><div><p className="brand-name">未来梦想剧场</p><p className="brand-tagline">每个梦想，都值得被看见</p></div></div><div className="topbar-meta"><span className="session-pill"><span className="status-dot" />{mode === 'classroom' ? `课堂模式 · 第 ${sessionNumber} 位` : '家庭模式'}</span>{view !== 'entry' && <button className="icon-button" title="返回入口" onClick={() => clearSession(false)}><X size={18} /></button>}</div></header>
     <main className={`main-content view-${view}`}>
       {view !== 'entry' && view !== 'complete' && view !== 'poster' && <div className="journey-bar"><div className="journey-label"><span>当前步骤</span><strong>{statusLabel}</strong></div><div className="journey-progress" aria-label={`当前进度 ${progress}%`}><span style={{ width: `${Math.max(8, progress)}%` }} /></div><span className={`privacy-label ${apiStatus}`}><LockKeyhole size={14} />{apiStatus === 'connected' ? '本地服务已连接' : '离线也可体验'}</span></div>}
-      {view === 'entry' && <section className="entry-layout"><div className="entry-copy"><div className="eyebrow"><span />儿童想象力体验</div><h1>说出一个梦想，<br /><em>看见未来的自己。</em></h1><p className="entry-description">和虚拟引导员聊一会儿，把孩子心里的想法变成一张独一无二的梦想卡。</p><div className="entry-actions"><button className="primary-button large" onClick={() => chooseMode('classroom')}><Mic size={19} />老师带孩子体验<ArrowRight size={18} /></button><button className="secondary-button large" onClick={() => chooseMode('family')}><Heart size={18} />家庭体验</button></div><div className="entry-trust"><div><ShieldCheck size={16} /><span>默认不保存原始照片和录音</span></div><div><Sparkles size={16} /><span>这是一场想象，不是对未来的预测</span></div></div></div><div className="entry-art"><img className="cover-image" src={coverSpace} alt="小朋友在太空中探索未来" /></div></section>}
+      {view === 'entry' && <section className="entry-layout">
+        <div className="entry-copy">
+          <div className="entry-mascot"><span className="mascot-face">🦊</span><span className="mascot-bubble">嗨！我是梦想小伙伴</span></div>
+          <div className="eyebrow"><span />儿童想象力体验</div>
+          <h1>把你的梦想，<br /><em>变成一张魔法卡！</em></h1>
+          <p className="entry-description">告诉我想做什么，我们一起把它画出来。</p>
+          <div className="entry-actions">
+            <button className="mode-card classroom" onClick={() => chooseMode('classroom')}>
+              <span className="mode-emoji">🍎</span>
+              <span className="mode-text"><strong>老师带小朋友</strong><small>课堂模式 · 约 3-5 分钟</small></span>
+              <ArrowRight size={20} />
+            </button>
+            <button className="mode-card family" onClick={() => chooseMode('family')}>
+              <span className="mode-emoji">🏠</span>
+              <span className="mode-text"><strong>和爸爸妈妈一起</strong><small>家庭模式 · 慢慢聊</small></span>
+              <ArrowRight size={20} />
+            </button>
+          </div>
+          <div className="entry-trust"><div><ShieldCheck size={16} /><span>不保存照片和录音</span></div><div><Sparkles size={16} /><span>这是一场想象，不是预测</span></div></div>
+        </div>
+        <div className="entry-art">
+          <img className="cover-image" src={coverSpace} alt="小朋友在太空中探索未来" />
+          <span className="art-sticker sticker-star">⭐</span>
+          <span className="art-sticker sticker-car">🚗</span>
+          <span className="art-sticker sticker-dino">🦕</span>
+          <span className="art-sticker sticker-rainbow">🌈</span>
+        </div>
+      </section>}
       {view === 'setup' && <section className="content-section narrow-section">
         <div className="section-heading"><div><div className="eyebrow"><span />{mode === 'classroom' ? '课堂准备' : '家庭准备'}</div><h2>先把这场体验准备好</h2><p>可以直接使用默认设置，整个流程大约需要 3-5 分钟。</p></div><div className="heading-icon coral"><Settings2 size={22} /></div></div>
         <div className="settings-grid">
@@ -1663,10 +1726,10 @@ function App() {
         </div>
       </section>}
       {view === 'device' && <section className="content-section narrow-section"><div className="section-heading"><div><div className="eyebrow"><span />设备检查</div><h2>让我们听见，也看见</h2><p>设备只会在你选择使用时打开。摄像头和麦克风可以分别跳过。</p></div><div className="heading-icon mint"><Camera size={22} /></div></div><div className="device-grid"><div className="device-preview"><Camera size={26} /><span>摄像头权限检查</span><small>{cameraStatus === 'ready' ? '已连接' : cameraStatus === 'checking' ? '正在检查…' : cameraStatus === 'unavailable' ? '不可用；可选卡通形象' : '点击“检查设备”测试'}</small></div><div className="device-check-list"><div className={`device-row ${microphoneStatus === 'ready' ? 'ready' : ''}`}><span className="device-icon"><Mic size={18} /></span><div><strong>麦克风</strong><small>{microphoneStatus === 'ready' ? '已连接' : microphoneStatus === 'checking' ? '正在检查…' : microphoneStatus === 'unavailable' ? '不可用；仍可点选答案' : '点击“检查设备”测试'}</small></div><span className="device-status">{microphoneStatus === 'ready' && <CheckCircle2 size={18} />}</span></div><div className="device-row"><span className="device-icon"><Volume2 size={18} /></span><div><strong>扬声器</strong><small>{voiceEnabled ? '开启后会播放引导语音' : '语音播报已关闭'}</small></div></div><button className="secondary-button device-test" onClick={checkDevices} disabled={deviceStatus === 'checking'}><RefreshCw size={17} className={deviceStatus === 'checking' ? 'spin' : ''} />{deviceStatus === 'checking' ? '正在检查…' : '检查设备'}</button></div></div>{cameraError && <div className="warning-callout"><CircleHelp size={18} /><span>{cameraError}</span></div>}<div className="section-footer"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回设置</button><button className="primary-button" onClick={startInterview}>开始体验 <ArrowRight size={17} /></button></div></section>}
-      {view === 'welcome' && <section className="welcome-layout child-welcome-layout"><div className="guide-portrait"><div className="guide-face">✦</div><span className="guide-status"><span />准备好了</span></div><div className="welcome-copy"><div className="eyebrow"><span />你好呀</div><h2>我们一起<br /><em>想一想未来！</em></h2><p>小伙伴会问你一个问题。你想说什么，就说什么。</p><button className="primary-button large" onClick={beginChildConversation}><Mic size={19} />开始聊天 <ArrowRight size={18} /></button><button className="text-button" onClick={() => setView('setup')}><Settings2 size={15} />老师设置</button></div></section>}
+      {view === 'welcome' && <section className="welcome-layout child-welcome-layout"><div className="guide-portrait"><div className="guide-face">🦊</div><span className="guide-status"><span />准备好了</span></div><div className="welcome-copy"><div className="eyebrow"><span />你好呀</div><h2>我们一起<br /><em>想一想未来！</em></h2><p>小伙伴会问你一个问题。你想说什么，就说什么。</p><button className="primary-button large" onClick={beginChildConversation}><Mic size={19} />开始聊天 <ArrowRight size={18} /></button><button className="text-button" onClick={() => setView('setup')}><Settings2 size={15} />老师设置</button></div></section>}
       {view === 'interview' && <section className="content-section interview-section child-interview-section">
         <div className="chat-companion-bar">
-          <div className="guide-face chat-guide-face">✦</div>
+          <div className="guide-face chat-guide-face">🦊</div>
           <div className="chat-companion-info">
             <strong>梦想小伙伴</strong>
             <span className="chat-status-dot">{conversationState === 'thinking' ? '正在想一想…' : conversationState === 'speaking' ? '正在说话…' : conversationState === 'replying' ? '和你聊天中' : conversationState === 'generating' ? '准备画出来…' : '在线'}</span>
@@ -1674,17 +1737,26 @@ function App() {
         </div>
         <div className="chat-bubbles" ref={chatBubblesRef}>
           {chatMessages.map((msg) => <div className={`chat-bubble-row ${msg.role === 'system' ? 'row-system' : 'row-child'}`} key={msg.id}>
-            {msg.role === 'system' && <div className="chat-avatar">✦</div>}
+            {msg.role === 'system' && <div className="chat-avatar">🦊</div>}
             <div className={`chat-bubble ${msg.role === 'system' ? 'bubble-system' : 'bubble-child'}`}>{msg.text}</div>
           </div>)}
           {conversationState === 'thinking' && <div className="chat-bubble-row row-system">
-            <div className="chat-avatar">✦</div>
+            <div className="chat-avatar">🦊</div>
             <div className="chat-bubble bubble-system chat-typing-wrap"><span className="chat-typing"><i /><i /><i /></span></div>
           </div>}
         </div>
         <p className="listen-status child-listen-status">{isTranscribing ? (globalSettings.sttProvider === 'browser' ? '我在整理你说的话…' : 'Whisper 正在听清楚…') : isRecording ? '我在听你说，安静一会儿就会自动识别。' : conversationState === 'thinking' ? '小伙伴正在想一想…' : conversationState === 'speaking' ? '小伙伴正在说话…' : conversationState === 'generating' ? '我已经听懂你的梦想，正在准备下一步…' : conversationState === 'replying' ? '小伙伴正在和你聊…' : '轮到你说啦！点一下下面的小麦克风开始说话，也可以点选答案。'}</p>
         {voiceError && <div className="warning-callout voice-warning"><CircleHelp size={18} /><span>{voiceError}</span></div>}
-        {nameStage === 'ask' && <div className="teacher-name-panel">
+        {nameStage === 'ask' && !showNamePanel && (nameInput.trim()
+          ? <div className="name-confirm-bar">
+              <span>你叫 <strong>{nameInput}</strong>，对吗？</span>
+              <div className="name-confirm-actions">
+                <button className="primary-button" onClick={confirmChildName}>对，开始聊梦想 <ArrowRight size={16} /></button>
+                <button className="text-button" onClick={() => setShowNamePanel(true)}>改一改</button>
+              </div>
+            </div>
+          : <button className="text-button name-help-toggle" onClick={() => setShowNamePanel(true)}>老师帮忙输入名字</button>)}
+        {nameStage === 'ask' && showNamePanel && <div className="teacher-name-panel">
           <div className="teacher-name-row">
             <label className="field-label teacher-name-field">小朋友的名字
               <input value={nameInput} onChange={(event) => setNameInput(event.target.value)} onBlur={() => { if (!childGender) maybeGuessGender(nameInput.trim()) }} maxLength={12} placeholder="老师输入或修改名字" />
@@ -1698,10 +1770,13 @@ function App() {
             </div>
           </div>
           <p className="teacher-name-hint">孩子可以直接说名字；识别不准时老师帮忙输入。性别由大模型按名字猜测，可能猜错，老师可以改。名字只保存在本机内存中。</p>
-          <button className="primary-button" onClick={confirmChildName} disabled={!nameInput.trim()}>确认名字，开始聊梦想 <ArrowRight size={16} /></button>
+          <div className="name-panel-actions">
+            <button className="primary-button" onClick={confirmChildName} disabled={!nameInput.trim()}>确认名字，开始聊梦想 <ArrowRight size={16} /></button>
+            <button className="text-button" onClick={() => setShowNamePanel(false)}>收起</button>
+          </div>
         </div>}
         {nameStage === 'done' && <button className="text-button child-help-button" onClick={() => setShowFallbackChoices((current) => !current)}>{showFallbackChoices ? '收起老师帮忙' : '需要老师帮忙？'}</button>}
-        {nameStage === 'done' && showFallbackChoices && <div className="choice-grid child-fallback-grid">{currentQuestion.options.map((option) => <button className="choice-button" key={option} onClick={() => { setShowFallbackChoices(false); void answerAdaptiveTurn(option, 'choice') }}>{option}<ArrowRight size={15} /></button>)}</div>}
+        {nameStage === 'done' && showFallbackChoices && <div className="choice-grid child-fallback-grid">{currentQuestion.options.map((option) => <button className="choice-button" key={option} onClick={() => { setShowFallbackChoices(false); void answerAdaptiveTurn(option, 'choice') }}><span className="choice-emoji">{optionEmoji(option)}</span>{option}<ArrowRight size={15} /></button>)}</div>}
         <button className={`listen-orb child-listen-orb ${isListening ? 'listening' : ''}`} onClick={() => void startVoiceAnswer()} disabled={isTranscribing || conversationState === 'thinking' || conversationState === 'replying' || conversationState === 'generating' || conversationState === 'speaking'} aria-label={isTranscribing ? '正在识别' : isRecording ? '说完了' : isListening ? '停止聆听' : '开始说话'}><span className="orb-core"><Mic size={30} /></span><span className="orb-ring ring-one" /><span className="orb-ring ring-two" /></button>
         <div className="section-footer compact"><button className="text-button" onClick={goBack}><ArrowLeft size={16} />返回</button><button className="text-button" onClick={() => { setConversationState('paused'); stopVoice() }}>暂时休息</button></div>
       </section>}
