@@ -1976,7 +1976,7 @@ function App() {
         <div className="privacy-footer"><ShieldCheck size={15} />班级名册只保存在本机内存中，删除数据或返回入口后会自动清空。</div>
       </section>}
     </main>
-    <footer className="app-footer"><span><ShieldCheck size={14} />儿童友好 · 隐私默认保护</span><span>开源原型 · {globalSettings.imageProvider === 'siliconflow' ? '硅基流动图片服务' : 'Mock 图片预览'}</span></footer>
+    <footer className="app-footer"><span><ShieldCheck size={14} />儿童友好 · 隐私默认保护</span><span>by 豆豆妈妈</span></footer>
   </div>
 }
 
