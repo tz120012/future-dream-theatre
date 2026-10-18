@@ -1,0 +1,38 @@
+services:
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      APP_MODE: ${APP_MODE:-local}
+      STT_PROVIDER: ${STT_PROVIDER:-local_whisper}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      WHISPER_MODEL_DIR: /app/data/whisper
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
+      LLM_PROVIDER: ${LLM_PROVIDER:-template}
+      TTS_PROVIDER: ${TTS_PROVIDER:-browser}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-mock}
+      RETENTION_MINUTES: ${RETENTION_MINUTES:-30}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SILICONFLOW_CHAT_MODEL: ${SILICONFLOW_CHAT_MODEL:-deepseek-ai/DeepSeek-V4.1-Flash}
+      SILICONFLOW_IMAGE_MODEL: ${SILICONFLOW_IMAGE_MODEL:-Tongyi-MAI/Z-Image}
+      SILICONFLOW_IMAGE_FAST_MODEL: ${SILICONFLOW_IMAGE_FAST_MODEL:-Tongyi-MAI/Z-Image-Turbo}
+      SILICONFLOW_IMAGE_EDIT_MODEL: ${SILICONFLOW_IMAGE_EDIT_MODEL:-Qwen/Qwen-Image-Edit-2509}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - app-data:/app/data
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  app-data:

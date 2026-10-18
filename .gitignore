@@ -1,0 +1,21 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/data/
+*.py[cod]
+
+# Local data and secrets
+.env
+.env.*
+!.env.example
+!backend/.env.example
+data/
+*.sqlite3
+*.db
+
+# Local tooling artifacts
+.acl-reports/
