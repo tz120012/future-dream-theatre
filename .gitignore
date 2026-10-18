@@ -19,3 +19,8 @@ data/
 
 # Local tooling artifacts
 .acl-reports/
+
+# Deployment bundle build output
+dist/
+deploy/whisper-model/
+deploy/images/

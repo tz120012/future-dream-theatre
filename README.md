@@ -26,6 +26,26 @@
 - 点击“完成并识别”后，录音发送到本机 API，转写结束即删除临时音频。
 - 不使用语音时仍可直接点选答案；设置页会说明本地录音处理方式。
 
+## 部署到其他电脑（傻瓜式）
+
+给老师/家长用的电脑不需要装 Node、Python，也不需要命令行：
+
+1. 目标电脑安装一次 **Docker Desktop**（官网下载，装完重启）；
+2. 把整个 `Forzh-Deploy` 文件夹拷过去（建议放在 `D:\Forzh-Deploy`）；
+3. 双击 **`一键部署.bat`**，等它自动导入镜像、启动服务并打开浏览器。
+
+之后上课只要访问 `http://127.0.0.1:8080/`。停止用 `停止服务.bat`，排查用 `查看日志.bat`，数据（API Key、设置）保存在 Docker 卷 `forzh_app-data` 中，重启和升级都不会丢。端口被占用（比如本机还开着开发模式的 uvicorn）时会自动换端口并在窗口里打印新地址。
+
+部署包的做法：镜像用 `docker save` 导出成 tar，Whisper base 模型随包提供并挂载进容器，所以目标电脑**第一次使用也不用联网下载模型**；compose 里写了 `pull_policy: never`，断网时不会去镜像仓库拉取而卡住。
+
+部署包里的文件、详细步骤、常见问题（端口占用、WSL、摄像头权限、语音不工作等）、升级与迁移，都写在 [deploy/部署说明.md](deploy/部署说明.md) 里。
+
+打这个包在开发机上一条命令：
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\build-deploy-bundle.ps1 -Version 1.0.1
+
+产物是 `dist\Forzh-Deploy\`（含两个镜像的 `docker save` 产物和预置的 Whisper base 模型，约 360 MB），加 `-Zip` 还会生成压缩包。
+
 ## 运行前端
 
 在 `frontend` 目录执行：
@@ -52,7 +72,7 @@
 
 本地 Whisper 模型只需要下载一次：默认保存在 `backend/data/whisper`，之后再启动会直接从磁盘加载，不会重复下载，也不会再联网。想放到别的磁盘可设置 `WHISPER_MODEL_DIR`（相对路径以 `backend` 目录为基准）；完全断网时可设置 `WHISPER_LOCAL_ONLY=1`。`GET /api/config/capabilities` 的 `whisper.cached` 会显示当前模型是否已经缓存。
 
-语音识别、对话模型和图片模型可在全局设置中配置；默认语音识别使用浏览器自带识别，对话优先使用硅基流动（未配置 Key 或未授权时会自动回退内置模板），图片默认 Mock。硅基流动使用 `https://api.siliconflow.cn/v1` 的对话与 `/images/generations` 图片接口。摄像头和麦克风需要在 `localhost` 或 HTTPS 页面中使用。
+语音识别、对话模型和图片模型可在全局设置中配置；默认语音识别使用浏览器自带识别，对话优先使用硅基流动（未配置 Key 或未授权时会自动回退内置模板），图片默认 Mock。语音播报默认使用硅基流动 `FunAudioLLM/CosyVoice2-0.5B` 的神经语音（可选温柔女声、活泼语气等，失败时回退浏览器语音）。硅基流动使用 `https://api.siliconflow.cn/v1` 的对话、`/audio/speech` 语音与 `/images/generations` 图片接口。摄像头和麦克风需要在 `localhost` 或 HTTPS 页面中使用。
 
 后端提供 `backend/.env.example` 作为配置模板，不配置 API Key 也能体验：对话会回退到内置模板，图片使用 Mock。直接运行后端时可复制为 `backend/.env`；使用 Compose 时可复制为项目根目录的 `.env`。Key 由用户自行提供和付费，保存在运行后端的设备上。
 

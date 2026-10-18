@@ -23,6 +23,8 @@ Web 设置面板通过 `GET/PUT /api/config/settings` 配置语音识别、Whisp
 
 `POST /api/stt/transcribe` 接收 multipart 表单字段 `audio` 和可选的 `language`（默认 `zh`），成功时返回识别文本和 provider。空录音、无语音、超大录音和模型不可用会返回对应错误。前端在转写前不会自动结束录音，孩子说完后由老师或孩子点击“完成并识别”；最长录音时间为 60 秒。
 
-`POST /api/sessions/{session_id}/dream-card` 在图片服务为 `siliconflow` 时调用 SiliconFlow `/v1/images/generations`，默认模型为 `Kwai-Kolors/Kolors`。后端只发送经确认的角色、场景和风格文字，将返回图像暂存在 `data/generated`，并通过 `/api/generated/{asset_id}` 提供不可缓存的本地访问。会话清理或过期时会删除图片。
+`POST /api/sessions/{session_id}/dream-card` 在图片服务为 `siliconflow` 时调用 SiliconFlow `/v1/images/generations`。三个模型分工不同：`siliconflow_image_model`（默认 `Tongyi-MAI/Z-Image`）用于无照片的精细绘本、`siliconflow_image_fast_model`（默认 `Tongyi-MAI/Z-Image-Turbo`）用于快速卡通和"长大以后"的成年模板、`siliconflow_image_edit_model`（默认 `Qwen/Qwen-Image-Edit-2509`）用于保脸的图生图与双图融合。后端只发送经确认的角色、场景和风格文字，将返回图像暂存在 `data/generated`，并通过 `/api/generated/{asset_id}` 提供不可缓存的本地访问。会话清理或过期时会删除图片。
+
+硅基流动对图片请求有内容审核，儿童照片的图生图请求偶发误判（HTTP 451 / code 20021）。后端会在一个总时间预算内自动重试，失败时把原因分成 `image_reference_rejected` / `image_prompt_rejected` / `image_auth_failed` / `image_quota_exceeded` / `image_timeout` / `image_upstream_error` 返回给前端，页面据此给出"换一张照片""重新生成""检查余额"之类的具体提示，而不是笼统的"服务不可用"。
 
 `POST /api/sessions/{session_id}/future-self/messages` 可在 `allow_online_model` 获得本次体验确认后调用已配置的聊天模型。请求包含儿童当前文字、梦想角色与场景，以及最多 8 条简短历史对话；照片和音频不在请求中。接口会把模型回复转换为简体中文并做基础儿童安全检查。

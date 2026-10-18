@@ -1,5 +1,8 @@
 .venv
 __pycache__
+# Local runtime data is mounted as a volume in Compose and must not bloat the
+# image build context (the Whisper cache alone is ~145 MB).
+data
 *.py[cod]
 .env
 .env.*

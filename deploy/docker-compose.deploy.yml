@@ -1,0 +1,69 @@
+# 未来梦想剧场 —— 部署用 Compose 文件
+#
+# 和开发用的 docker-compose.yml 的区别：
+#   * 只用现成镜像（image:），目标电脑不需要构建，不需要 Node/Python。
+#   * 语音识别默认使用本地 Whisper，模型文件通过 ./whisper-model 挂载，
+#     第一次使用不需要联网下载（包内已经带好 base 模型）。
+#   * pull_policy: never —— 断网时不会去镜像仓库拉取，直接报错而不是卡住。
+#
+# 所有 ${XXX:-默认值} 都可以写在同目录的 .env 里覆盖，不写也能跑。
+
+name: forzh
+
+services:
+  api:
+    image: forzh-api:${FORZH_TAG:-latest}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      APP_MODE: ${APP_MODE:-local}
+      # 本地 Whisper：录音只在本机转写，课堂断网也能用。
+      STT_PROVIDER: ${STT_PROVIDER:-local_whisper}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      WHISPER_MODEL_DIR: /opt/whisper-models
+      # 模型已随包提供；设为 1 可彻底禁止 Whisper 联网（换模型时会失败）。
+      WHISPER_LOCAL_ONLY: ${WHISPER_LOCAL_ONLY:-0}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
+      LLM_PROVIDER: ${LLM_PROVIDER:-siliconflow}
+      TTS_PROVIDER: ${TTS_PROVIDER:-browser}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-mock}
+      RETENTION_MINUTES: ${RETENTION_MINUTES:-30}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SILICONFLOW_CHAT_MODEL: ${SILICONFLOW_CHAT_MODEL:-deepseek-ai/DeepSeek-V4.1-Flash}
+      SILICONFLOW_IMAGE_MODEL: ${SILICONFLOW_IMAGE_MODEL:-Tongyi-MAI/Z-Image}
+      SILICONFLOW_IMAGE_FAST_MODEL: ${SILICONFLOW_IMAGE_FAST_MODEL:-Tongyi-MAI/Z-Image-Turbo}
+      SILICONFLOW_IMAGE_EDIT_MODEL: ${SILICONFLOW_IMAGE_EDIT_MODEL:-Qwen/Qwen-Image-Edit-2509}
+    ports:
+      # 只绑回环地址：别的电脑访问不到，摄像头/麦克风也能正常授权（localhost 算安全上下文）。
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - app-data:/app/data
+      # Whisper 模型目录（包内 whisper-model 文件夹）。
+      - ./whisper-model:/opt/whisper-models
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    image: forzh-web:${FORZH_TAG:-latest}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+
+volumes:
+  # 设置面板里保存的 API Key、会话临时文件都在这里，升级/重启不会丢。
+  app-data:
