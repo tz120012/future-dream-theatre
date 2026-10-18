@@ -61,7 +61,7 @@ class Settings:
     siliconflow_image_edit_model: str = _env("SILICONFLOW_IMAGE_EDIT_MODEL", "Qwen/Qwen-Image-Edit-2509")
     tts_provider: str = _env("TTS_PROVIDER", "siliconflow")
     siliconflow_tts_model: str = _env("SILICONFLOW_TTS_MODEL", "FunAudioLLM/CosyVoice2-0.5B")
-    siliconflow_tts_voice: str = _env("SILICONFLOW_TTS_VOICE", "FunAudioLLM/CosyVoice2-0.5B:anna")
+    siliconflow_tts_voice: str = _env("SILICONFLOW_TTS_VOICE", "FunAudioLLM/CosyVoice2-0.5B:bella")
     siliconflow_tts_tone: str = _env("SILICONFLOW_TTS_TONE", "warm")
     image_provider: str = _env("IMAGE_PROVIDER", "mock")
     retention_minutes: int = int(_env("RETENTION_MINUTES", "30"))

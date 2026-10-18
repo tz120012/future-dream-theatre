@@ -39,7 +39,7 @@ export const defaultGlobalSettings: GlobalSettings = {
   imageProvider: 'mock',
   ttsEnabled: true,
   ttsProvider: 'siliconflow',
-  ttsVoice: 'FunAudioLLM/CosyVoice2-0.5B:anna',
+  ttsVoice: 'FunAudioLLM/CosyVoice2-0.5B:bella',
   ttsTone: 'warm',
   retentionMinutes: 30,
 }

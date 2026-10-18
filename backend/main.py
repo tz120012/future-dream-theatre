@@ -148,7 +148,7 @@ class GlobalSettingsUpdate(BaseModel):
     siliconflow_image_fast_model: str = Field(default="Tongyi-MAI/Z-Image-Turbo", min_length=1, max_length=160)
     siliconflow_image_edit_model: str = Field(default="Qwen/Qwen-Image-Edit-2509", min_length=1, max_length=160)
     siliconflow_tts_model: str = Field(default="FunAudioLLM/CosyVoice2-0.5B", min_length=1, max_length=160)
-    siliconflow_tts_voice: str = Field(default="FunAudioLLM/CosyVoice2-0.5B:anna", min_length=1, max_length=160)
+    siliconflow_tts_voice: str = Field(default="FunAudioLLM/CosyVoice2-0.5B:bella", min_length=1, max_length=160)
     siliconflow_tts_tone: Literal["warm", "lively", "calm"] = "warm"
     siliconflow_api_key: str | None = Field(default=None, max_length=1000)
     clear_siliconflow_api_key: bool = False
