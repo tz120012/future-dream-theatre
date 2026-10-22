@@ -1,0 +1,47 @@
+name: 💡 功能建议
+description: 希望增加的能力、体验改进、课堂用法
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个项目最需要的是**真实课堂反馈**：哪句话孩子听不懂、哪一步会卡住、哪种语气更合适。
+        建议尽量描述「什么场景下、哪个孩子（年龄段）、卡在哪里」。
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 建议类型
+      options:
+        - 课堂流程与交互
+        - 语音识别 / 语音播报
+        - 对话内容与语气
+        - 图片生成效果
+        - 部署与运维
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 现在遇到什么问题
+      placeholder: 大班孩子在第 2 轮访谈时经常不知道"可以自己说"，只会等选项。
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望的改法
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息（可选）
+      description: 年龄段、班级人数、设备、使用频率等，有助于判断优先级
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已确认内容里没有 API Key、儿童照片或录音
+          required: true

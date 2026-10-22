@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # 前端依赖（React / Vite / TypeScript / oxlint）
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      frontend-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # 后端依赖（FastAPI / faster-whisper / ctranslate2 / Pillow）
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      backend-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions 版本（checkout / setup-node / setup-python）
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"

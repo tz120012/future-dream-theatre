@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 先看部署说明与常见问题
+    url: https://github.com/tz120012/future-dream-theatre/blob/main/deploy/部署说明.md
+    about: 端口占用、WSL、摄像头权限、语音不工作等问题，这里基本都有答案
+  - name: 🔐 安全问题请不要公开提 Issue
+    url: https://github.com/tz120012/future-dream-theatre/blob/main/SECURITY.md
+    about: 涉及密钥、儿童数据的问题请按 SECURITY.md 的方式私下联系
