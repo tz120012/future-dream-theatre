@@ -1,7 +1,7 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.32,<1
 pydantic>=2.9,<3
-python-multipart>=0.0.9,<1
+python-multipart>=0.0.32,<1
 faster-whisper>=1.1,<2
 # PyAV 19 removed the `metadata_errors` argument that faster-whisper still
 # passes to av.open(), which breaks every local transcription.
