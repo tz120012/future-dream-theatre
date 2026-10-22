@@ -6,6 +6,7 @@
 <img src="docs/screenshots/01-entry.png" width="820" alt="首页：把你的梦想，变成一张魔法卡" />
 
 <p>
+  <a href="https://github.com/tz120012/future-dream-theatre/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tz120012/future-dream-theatre/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-2ea44f">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11-3776AB">
   <img alt="React" src="https://img.shields.io/badge/react-19-61DAFB">
