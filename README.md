@@ -1,105 +1,165 @@
-# 未来梦想剧场
+# 未来梦想剧场 · Future Dream Theatre
 
-面向幼儿园课堂和家庭使用的儿童梦想探索互动原型。
+> 面向幼儿园课堂与家庭的「梦想探索」互动原型：孩子说出自己的梦想，系统生成一张**未来梦想卡**，再让孩子和想象中的「未来的自己」聊几句。
 
-小朋友通过语音、点击选项和可选照片表达想法，系统生成一张“未来梦想卡”，并让孩子和想象中的未来自己进行多轮对话。
+<!-- screenshots -->
+<img src="docs/screenshots/01-entry.png" width="820" alt="首页：把你的梦想，变成一张魔法卡" />
 
-## 当前实现
+<p>
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-2ea44f">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11-3776AB">
+  <img alt="React" src="https://img.shields.io/badge/react-19-61DAFB">
+  <img alt="Docker" src="https://img.shields.io/badge/docker%20compose-ready-2496ED">
+</p>
 
-第一阶段原型已经包含：
+**English** — A prototype for kindergarten classrooms and families. A child expresses a dream by voice, tapping picture choices, or an optional photo; the app turns it into a "future dream card" illustration and lets the child talk with an imagined future self. Speech recognition runs **locally** (faster-whisper). Everything else degrades gracefully: without an API key or network, conversations fall back to built-in templates and images fall back to a local card, so a lesson never gets stuck.
 
-- 老师课堂模式和家庭模式入口。
-- 课堂设置和设备检查。
-- 三轮儿童友好的梦想访谈。
-- 访谈结束后汇总三轮回答，整理出兴趣、想象场景和 2–3 个可确认的梦想方向。
-- 可选接入 OpenAI 兼容在线大模型或硅基流动；在线模式只发送经简体转换的文字回答，不发送照片或原始录音。
-- 在线模型失败、未配置或未获本次确认时，自动使用本地模板继续体验。
-- 摄像头授权、实时预览和拍照。
-- 卡通形象、使用照片、不使用照片三种选择。
-- Mock 梦想卡生成流程，也可用硅基流动文生图生成插画。
-- “未来的自己”语音或文字多轮对话；在线模式会携带最近几轮文字上下文。
-- 梦想卡下载。
-- 下一位小朋友切换和临时会话清理。
-- FastAPI 本地 API，包含会话、语音转写和 Mock 生成接口。
-- 前后端会话连接：回答记录、梦想卡任务轮询和未来自己接口。
-- 使用 faster-whisper 在本机进行中文语音识别；浏览器只负责录音。
-- 点击“完成并识别”后，录音发送到本机 API，转写结束即删除临时音频。
-- 不使用语音时仍可直接点选答案；设置页会说明本地录音处理方式。
+> 这是一个**产品原型**，不是可直接商用的成品。它面向幼儿使用，请在成人陪伴下使用，并注意 README 中「隐私与安全」一节的说明。
 
-## 部署到其他电脑（傻瓜式）
+## 为什么做这个
 
-给老师/家长用的电脑不需要装 Node、Python，也不需要命令行：
+幼儿园的「梦想」话题常常停在「你想当什么」这一句。这个原型想把它延长成一次完整的体验：
 
-1. 目标电脑安装一次 **Docker Desktop**（官网下载，装完重启）；
-2. 把整个 `Forzh-Deploy` 文件夹拷过去（建议放在 `D:\Forzh-Deploy`）；
-3. 双击 **`一键部署.bat`**，等它自动导入镜像、启动服务并打开浏览器。
+1. 孩子用自己的话讲出梦想（语音 / 点选图片选项）；
+2. 系统把三句话整理成几个**可以确认的方向**，而不是直接替孩子贴职业标签；
+3. 生成一张属于他的「未来梦想卡」；
+4. 孩子还能和「未来的自己」对话，听对方用孩子的语气回应。
 
-之后上课只要访问 `http://127.0.0.1:8080/`。停止用 `停止服务.bat`，排查用 `查看日志.bat`，数据（API Key、设置）保存在 Docker 卷 `forzh_app-data` 中，重启和升级都不会丢。端口被占用（比如本机还开着开发模式的 uvicorn）时会自动换端口并在窗口里打印新地址。
+<p>
+  <img src="docs/screenshots/02-interview.png" width="520" alt="梦想访谈" />
+  <img src="docs/screenshots/03-teacher-setup.png" width="420" alt="老师准备面板" />
+</p>
 
-部署包的做法：镜像用 `docker save` 导出成 tar，Whisper base 模型随包提供并挂载进容器，所以目标电脑**第一次使用也不用联网下载模型**；compose 里写了 `pull_policy: never`，断网时不会去镜像仓库拉取而卡住。
+## 功能
 
-部署包里的文件、详细步骤、常见问题（端口占用、WSL、摄像头权限、语音不工作等）、升级与迁移，都写在 [deploy/部署说明.md](deploy/部署说明.md) 里。
+**课堂体验**
+- 老师课堂模式 / 家庭模式两种入口，课堂上一位小朋友约 3~5 分钟。
+- 老师准备面板：年龄段、主题、图片风格、是否开启语音播报，以及每项在线能力的**逐项授权勾选**。
+- 三轮儿童友好的梦想访谈，支持语音回答，也可只点图片选项。
+- 访谈后汇总兴趣、想象场景和 2~3 个可确认方向，由孩子或老师选定后再生成。
+- 摄像头拍照 / 上传正脸照，可选「卡通形象」「用照片」「不用照片」。
+- 「精细绘本」与「快速卡通」两种出图速度，适配不同课堂时长。
+- 「未来的自己」多轮对话，带最近几轮文字上下文，可语音播报。
+- 梦想卡下载；「下一位小朋友」一键切换并清理临时数据。
 
-打这个包在开发机上一条命令：
+**工程侧**
+- FastAPI 本地 API：会话、语音转写、语音合成、梦想卡任务轮询。
+- 本机 faster-whisper 中文语音识别，录音转写后立即删除，浏览器只负责录音。
+- 语音播报用 CosyVoice2 神经音色（8 种音色 × 3 种语气），失败自动回退浏览器 TTS。
+- 出图失败原因分级返回（内容审核 / 余额 / Key / 超时），页面给出可操作提示。
+- 一键部署包：目标电脑只需装 Docker Desktop，**首次运行也不联网下载模型**。
 
-    powershell -ExecutionPolicy Bypass -File .\scripts\build-deploy-bundle.ps1 -Version 1.0.1
+## 快速开始
 
-产物是 `dist\Forzh-Deploy\`（含两个镜像的 `docker save` 产物和预置的 Whisper base 模型，约 360 MB），加 `-Zip` 还会生成压缩包。
+### 方式一：Docker Compose（推荐）
 
-## 运行前端
+```bash
+git clone https://github.com/<your-account>/future-dream-theatre.git
+cd future-dream-theatre
+docker compose up --build
+```
 
-在 `frontend` 目录执行：
+打开 <http://localhost:8080/>，接口健康检查在 <http://localhost:8000/api/health>。
 
-    npm install
-    npm run dev
+- 端口只绑定 `127.0.0.1`，不会向局域网开放（摄像头/麦克风也要求 localhost 或 HTTPS）。
+- 设置与 Whisper 模型保存在 Docker volume `app-data` 中，重建容器不会丢。
+- 首次语音识别会下载 Whisper `base` 模型（约 145 MB），之后从磁盘加载，不再联网。
 
-打开 `http://localhost:5173/`。
+### 方式二：本地开发
 
-生产构建：
+```bash
+# 后端
+cd backend
+python -m venv .venv && .venv\Scripts\activate    # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 
-    npm run build
+# 前端（另开一个终端）
+cd frontend
+npm install
+npm run dev
+```
 
-## 运行后端
+打开 <http://localhost:5173/>。Vite 已把 `/api` 代理到 `localhost:8000`。
 
-在 `backend` 目录执行：
+### 方式三：给老师的离线部署包
 
-    py -m venv .venv
-    .venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    uvicorn main:app --reload --port 8000
+面向「目标电脑不装 Node/Python、不需要命令行」的场景：
 
-健康检查地址：`http://localhost:8000/api/health`
+1. 开发机执行 `powershell -ExecutionPolicy Bypass -File .\scripts\build-deploy-bundle.ps1 -Version 2.0.0`；
+2. 把生成的 `dist\Forzh-Deploy\`（约 360 MB）整个拷到目标电脑；
+3. 目标电脑装一次 Docker Desktop，双击 `一键部署.bat`。
 
-本地 Whisper 模型只需要下载一次：默认保存在 `backend/data/whisper`，之后再启动会直接从磁盘加载，不会重复下载，也不会再联网。想放到别的磁盘可设置 `WHISPER_MODEL_DIR`（相对路径以 `backend` 目录为基准）；完全断网时可设置 `WHISPER_LOCAL_ONLY=1`。`GET /api/config/capabilities` 的 `whisper.cached` 会显示当前模型是否已经缓存。
+详细步骤、端口冲突、WSL、摄像头权限等排障，见 [deploy/部署说明.md](deploy/部署说明.md)。
 
-语音识别、对话模型和图片模型可在全局设置中配置；默认语音识别使用浏览器自带识别，对话优先使用硅基流动（未配置 Key 或未授权时会自动回退内置模板），图片默认 Mock。语音播报默认使用硅基流动 `FunAudioLLM/CosyVoice2-0.5B` 的神经语音（可选温柔女声、活泼语气等，失败时回退浏览器语音）。硅基流动使用 `https://api.siliconflow.cn/v1` 的对话、`/audio/speech` 语音与 `/images/generations` 图片接口。摄像头和麦克风需要在 `localhost` 或 HTTPS 页面中使用。
+## 配置
 
-后端提供 `backend/.env.example` 作为配置模板，不配置 API Key 也能体验：对话会回退到内置模板，图片使用 Mock。直接运行后端时可复制为 `backend/.env`；使用 Compose 时可复制为项目根目录的 `.env`。Key 由用户自行提供和付费，保存在运行后端的设备上。
+不配置任何 Key 也能完整走一遍流程（对话用内置模板、图片用占位卡）。想要真实的 AI 对话 / 插画 / 语音，需要一把 [硅基流动](https://cloud.siliconflow.cn/) API Key，在页面**左上角图标 → 设置**里填写，或用环境变量：
 
-页面左上角的图标打开全局设置，可切换浏览器语音识别或本地 Whisper、配置 OpenAI 兼容 API 或硅基流动、选择图片生成服务、开关语音播报和设置新会话保留时间。硅基流动使用同一把 Key，聊天模型和图片模型分别配置，默认分别为 `deepseek-ai/DeepSeek-V4.1-Flash` 和 `Tongyi-MAI/Z-Image`。照片页还能按课堂时间选择出图速度：“精细绘本”使用 Z-Image（约 15–20 秒，水彩绘本感），“快速卡通”使用 Z-Image-Turbo（约 5 秒），两个模型都可在设置里替换。照片模式可以现场拍照，也可以直接上传一张正脸照；上传/拍照后会让人物参考孩子的脸，并可选“现在的样子”（约 20 秒、保脸更准）或“长大以后”（两步生成，约 1 分钟，成年版的五官由模型推断，可能不完全像）。在线对话用于“梦想理解”和“未来的自己”多轮回复。老师或家长可在每次体验前分别确认是否发送访谈及未来对话文字、是否发送已确认的角色/场景/风格文字来生成图片。API Key 保存在后端本机配置数据中，不会由读取接口返回，也不会写入浏览器存储。
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SILICONFLOW_API_KEY` | 空 | 对话、图片、语音共用一把 Key |
+| `LLM_PROVIDER` | `siliconflow` | `template` = 只用内置模板（离线、免费） |
+| `IMAGE_PROVIDER` | `mock` | `siliconflow` = 真实生成插画 |
+| `TTS_PROVIDER` | `siliconflow` | `browser` = 浏览器语音（离线可用） |
+| `STT_PROVIDER` | `browser` | `local_whisper` = 本机转写（离线可用） |
+| `WHISPER_MODEL` | `base` | `tiny` / `base` / `small` |
+| `WHISPER_MODEL_DIR` | `backend/data/whisper` | 模型缓存目录 |
+| `SILICONFLOW_CHAT_MODEL` | `deepseek-ai/DeepSeek-V4.1-Flash` | 对话模型 |
+| `SILICONFLOW_IMAGE_MODEL` | `Tongyi-MAI/Z-Image` | 精细绘本 / 快速档 / 保脸编辑模型分别可配 |
+| `SILICONFLOW_TTS_VOICE` | `FunAudioLLM/CosyVoice2-0.5B:bella` | 8 种预置音色 |
+| `SILICONFLOW_TTS_TONE` | `warm` | `warm` / `lively` / `calm` |
+| `RETENTION_MINUTES` | `30` | 会话与临时图片在本机保留时长 |
 
-设置面板写入的 API Key 保存在后端 `data/settings.json`，文件未加密；也可通过本机 `.env` 配置。当前原型没有账号和多租户隔离，只适合本机或可信的自托管环境，不要直接公开到互联网。在线服务的计费、数据处理和留存规则取决于服务商及账号设置，启用前请查阅其最新政策。
+完整模板见 [`backend/.env.example`](backend/.env.example)，部署包另有 [`deploy/.env.example`](deploy/.env.example)。
 
-梦想理解接口为 `POST /api/sessions/{session_id}/dream-analysis`。请求包含本轮回答和 `allow_online_model` 确认字段；服务端会校验模型返回的 JSON、长度、候选方向和儿童安全词，异常时返回模板回退结果。在线模型不得直接给孩子贴职业或能力标签，页面会让孩子或老师选择方向后再进入拍照和生成。
+## 隐私与安全
 
-图片接口为 `POST /api/sessions/{session_id}/dream-card`。硅基流动模式下只发送已确认的角色、场景和风格文字，并要求 `allow_online_image` 确认。后端将硅基流动返回的临时图片下载到本机，再通过 `/api/generated/{asset_id}` 提供给前端；会话清理或过期时删除图片。摄像头照片不会上传到图片服务。
+这个项目处理的是**儿童的声音、照片和表达**，请认真读这几条：
 
-## Docker Compose
+- **默认不出网**：语音识别在本机完成，录音转写后即删除；默认图片为 Mock、对话为内置模板。
+- **逐项授权**：老师/家长需要在准备面板上分别勾选「对话文字可发送到在线模型」「梦想文字可发送到图片服务」「本张照片可作为参考图」，未勾选就只走本地能力。
+- **照片只在勾选后上传**；不勾选时照片只在本机内存中使用。
+- **API Key 明文保存在本机**（`data/settings.json` 或 Docker volume），读取接口不会返回 Key，也不会写进浏览器存储。
+- **没有账号体系、没有多租户隔离**：只适合本机或可信的自托管环境，**不要直接暴露到公网**。需要局域网访问时，请自行加反向代理、HTTPS 和访问控制。
+- 在线服务的计费、数据处理与留存规则取决于服务商（当前实现为硅基流动），启用前请查阅其最新政策。
 
-安装并启动 Docker Desktop 后，在项目根目录执行：
+## 目录结构
 
-    docker compose up --build
+```
+backend/                 FastAPI 本地服务（会话、转写、合成、出图任务）
+  main.py                全部 API 与在线服务编排
+  settings.py            环境变量与 .env 加载
+frontend/                React + TypeScript + Vite
+  src/App.tsx            全部页面与交互状态机
+  src/services/          API 封装与本地设置
+deploy/                  离线部署包模板与「一键部署」脚本
+scripts/                 开发机打包脚本
+docs/screenshots/        README 截图
+PRD.md                   产品需求文档
+TECHNICAL-PLAN.md        技术方案
+UI-PROTOTYPE.md          页面原型说明
+```
 
-打开 `http://localhost:8080/`。API 健康检查地址为 `http://localhost:8000/api/health`。
+## 文档
 
-Compose 将前端和 API 端口绑定在本机回环地址，不会默认向局域网开放。全局设置和本地 Whisper 模型都保存在 Docker volume `app-data` 中；如需迁移，请保留该 volume。
-
-首次点击“完成并识别”时，后端会下载默认的 Whisper `base` 模型，等待时间取决于网络；模型保存在 `app-data` volume 的 `whisper` 目录，后续启动直接从磁盘加载，不会重新下载。默认以 CPU `int8` 运行。可在项目根目录 `.env` 中设置 `WHISPER_MODEL=tiny` 以减少资源占用，或在无法访问 Hugging Face 时设置 `HF_ENDPOINT=https://hf-mirror.com`。硅基流动 Key、聊天模型和图片模型也可以通过全局设置配置，或在本机 `.env` 中设置 `SILICONFLOW_API_KEY`、`SILICONFLOW_CHAT_MODEL` 和 `SILICONFLOW_IMAGE_MODEL`。
-
-## 目录
-
-- [PRD](PRD.md)
+- [产品需求（PRD）](PRD.md)
 - [技术方案](TECHNICAL-PLAN.md)
 - [页面原型](UI-PROTOTYPE.md)
-- [前端](frontend/)
-- [本地 API 后端](backend/)
+- [图片生成链路说明](IMAGE-GENERATION.md)
+- [部署说明（给老师）](deploy/部署说明.md)
+- [安全策略](SECURITY.md) · [贡献指南](CONTRIBUTING.md)
+
+## 贡献
+
+欢迎提 Issue 和 PR。这个项目最需要的是**真实的课堂反馈**：哪些话孩子听不懂、哪一步会卡住、哪种语气更合适。提交前请先看 [CONTRIBUTING.md](CONTRIBUTING.md)，并且**不要提交任何 API Key、儿童照片或录音**。
+
+## 许可证
+
+[MIT](LICENSE)。可以自由使用、修改、商用，保留版权声明即可。
+
+## 致谢
+
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) / [CTranslate2](https://github.com/OpenNMT/CTranslate2)：本机语音识别
+- [硅基流动 SiliconFlow](https://cloud.siliconflow.cn/)：对话、图片、CosyVoice2 语音合成
+- [FastAPI](https://fastapi.tiangolo.com/) · [React](https://react.dev/) · [Vite](https://vite.dev/) · [nginx](https://nginx.org/)

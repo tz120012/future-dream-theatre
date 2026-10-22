@@ -24,3 +24,11 @@ data/
 dist/
 deploy/whisper-model/
 deploy/images/
+
+# 内部评审记录，不随仓库发布
+审查意见_v1.0.md
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log

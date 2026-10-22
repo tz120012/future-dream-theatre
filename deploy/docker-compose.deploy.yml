@@ -26,7 +26,11 @@ services:
       WHISPER_LOCAL_ONLY: ${WHISPER_LOCAL_ONLY:-0}
       HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
       LLM_PROVIDER: ${LLM_PROVIDER:-siliconflow}
-      TTS_PROVIDER: ${TTS_PROVIDER:-browser}
+      # 神经网络语音播报（CosyVoice2）。没有 Key 时页面会自动回退浏览器语音。
+      TTS_PROVIDER: ${TTS_PROVIDER:-siliconflow}
+      SILICONFLOW_TTS_MODEL: ${SILICONFLOW_TTS_MODEL:-FunAudioLLM/CosyVoice2-0.5B}
+      SILICONFLOW_TTS_VOICE: ${SILICONFLOW_TTS_VOICE:-FunAudioLLM/CosyVoice2-0.5B:bella}
+      SILICONFLOW_TTS_TONE: ${SILICONFLOW_TTS_TONE:-warm}
       IMAGE_PROVIDER: ${IMAGE_PROVIDER:-mock}
       RETENTION_MINUTES: ${RETENTION_MINUTES:-30}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
